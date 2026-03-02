@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
                                QStyle, QApplication, QMessageBox)
 from PySide6.QtGui import QIcon, QAction
 from PySide6.QtCore import QEvent, QTimer, QThread, Signal
+from .panels.onboard_panel import OnboardPanel
 from .panels.instance_panel import InstancePanel
 from .panels.dependency_panel import DependencyPanel
 from .panels.backup_panel import BackupPanel
@@ -96,14 +97,19 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         
         # Panels
+        self.onboard_panel = OnboardPanel()
         self.instance_panel = InstancePanel()
         self.dependency_panel = DependencyPanel()
         self.backup_panel = BackupPanel()
         self.log_panel = LogPanel()
         self.plugin_panel = PluginPanel()
         self.advanced_panel = AdvancedPanel()
+
+        self.onboard_panel.dependencies_ready.connect(self.dependency_panel.refresh_all_cards)
+        self.onboard_panel.sample_ready.connect(self.instance_panel.refresh_instances)
         
         # Add Tabs
+        self.tabs.addTab(self.onboard_panel, i18n.t("tab_onboard"))
         self.tabs.addTab(self.instance_panel, i18n.t("tab_instances"))
         self.tabs.addTab(self.dependency_panel, i18n.t("tab_dependencies"))
         self.tabs.addTab(self.backup_panel, i18n.t("tab_backups"))
@@ -161,7 +167,7 @@ class MainWindow(QMainWindow):
     def on_language_changed(self, lang):
         self.update_ui_texts()
         # Propagate to panels if they have update_ui_texts method
-        for panel in [self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.advanced_panel]:
             if hasattr(panel, 'update_ui_texts'):
                 panel.update_ui_texts()
 
@@ -194,12 +200,13 @@ class MainWindow(QMainWindow):
         self.update_theme_button_text()
 
         self.lang_btn.setText(i18n.t("lang_switch"))
-        self.tabs.setTabText(0, i18n.t("tab_instances"))
-        self.tabs.setTabText(1, i18n.t("tab_dependencies"))
-        self.tabs.setTabText(2, i18n.t("tab_backups"))
-        self.tabs.setTabText(3, i18n.t("tab_logs"))
-        self.tabs.setTabText(4, i18n.t("tab_plugins"))
-        self.tabs.setTabText(5, i18n.t("tab_advanced"))
+        self.tabs.setTabText(0, i18n.t("tab_onboard"))
+        self.tabs.setTabText(1, i18n.t("tab_instances"))
+        self.tabs.setTabText(2, i18n.t("tab_dependencies"))
+        self.tabs.setTabText(3, i18n.t("tab_backups"))
+        self.tabs.setTabText(4, i18n.t("tab_logs"))
+        self.tabs.setTabText(5, i18n.t("tab_plugins"))
+        self.tabs.setTabText(6, i18n.t("tab_advanced"))
         if hasattr(self, "tray_icon") and self.tray_icon:
             self.tray_icon.setToolTip(i18n.t("app_title"))
         if hasattr(self, "action_show") and self.action_show:
@@ -256,7 +263,7 @@ class MainWindow(QMainWindow):
             worker.wait(1000)
         self._update_check_worker = None
 
-        for panel in [self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.advanced_panel]:
             shutdown = getattr(panel, "shutdown", None)
             if callable(shutdown):
                 try:

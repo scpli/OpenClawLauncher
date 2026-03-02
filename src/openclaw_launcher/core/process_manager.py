@@ -85,7 +85,13 @@ class ProcessManager:
         return shim_dir
 
     @classmethod
-    def _build_cli_script(cls, instance_name: str, instance_path: Path, env: dict) -> Path:
+    def _build_cli_script(
+        cls,
+        instance_name: str,
+        instance_path: Path,
+        env: dict,
+        initial_command: Optional[list[str]] = None,
+    ) -> Path:
         script_dir = Config.LOGS_DIR / "_cli_scripts"
         script_dir.mkdir(parents=True, exist_ok=True)
         node_cmd = InstallManager.resolve_runtime_tool(env, "node")
@@ -110,6 +116,9 @@ class ProcessManager:
                     f"echo Working directory: {instance_path}",
                 ]
             )
+            if initial_command:
+                command_line = subprocess.list2cmdline([str(part) for part in initial_command])
+                lines.append(command_line)
             script_path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
             return script_path
 
@@ -129,9 +138,12 @@ class ProcessManager:
                 f"echo \"OpenClaw instance CLI ready: {instance_name}\"",
                 "echo \"Environment loaded from runtime + .env.local\"",
                 f"echo \"Working directory: {instance_path}\"",
-                "exec \"${SHELL:-/bin/bash}\" -i",
             ]
         )
+        if initial_command:
+            cmd = " ".join(shlex.quote(str(part)) for part in initial_command)
+            lines.append(cmd)
+        lines.append("exec \"${SHELL:-/bin/bash}\" -i")
         script_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         script_path.chmod(script_path.stat().st_mode | 0o111)
         return script_path
@@ -144,6 +156,46 @@ class ProcessManager:
         InstallManager.setup_instance_environment(instance_path, instance_name)
         env = InstallManager.get_runtime_env(instance_path=instance_path, instance_name=instance_name)
         script_path = cls._build_cli_script(instance_name, instance_path, env)
+
+        system = platform.system()
+        if system == "Darwin":
+            subprocess.Popen(["open", "-a", "Terminal", str(script_path)])
+            return
+
+        if system == "Windows":
+            subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", str(script_path)])
+            return
+
+        script_cmd = f"bash -lc 'source {shlex.quote(str(script_path))}'"
+        terminal_commands = [
+            ["x-terminal-emulator", "-e", script_cmd],
+            ["gnome-terminal", "--", "bash", "-lc", f"source {shlex.quote(str(script_path))}"],
+            ["konsole", "-e", "bash", "-lc", f"source {shlex.quote(str(script_path))}"],
+            ["xfce4-terminal", "-e", script_cmd],
+            ["xterm", "-e", "bash", "-lc", f"source {shlex.quote(str(script_path))}"],
+        ]
+
+        for command in terminal_commands:
+            if shutil.which(command[0]):
+                subprocess.Popen(command)
+                return
+
+        raise RuntimeError("No supported terminal emulator found for launching instance CLI.")
+
+    @classmethod
+    def launch_instance_onboard_cli(cls, instance_name: str, instance_path: Path):
+        if not instance_path.exists() or not instance_path.is_dir():
+            raise FileNotFoundError(f"Instance directory not found: {instance_path}")
+
+        InstallManager.setup_instance_environment(instance_path, instance_name)
+        env = InstallManager.get_runtime_env(instance_path=instance_path, instance_name=instance_name)
+        node_cmd = InstallManager.resolve_runtime_tool(env, "node")
+        script_path = cls._build_cli_script(
+            instance_name,
+            instance_path,
+            env,
+            initial_command=[node_cmd, "openclaw.mjs", "onboard"],
+        )
 
         system = platform.system()
         if system == "Darwin":
