@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from ...core.config import Config
 from ...core.install_manager import InstallManager
+from ...core.process_manager import ProcessManager
 from ..i18n import i18n
 
 
@@ -35,6 +36,9 @@ class PluginInstallWorker(QThread):
 
     def run(self):
         try:
+            if ProcessManager.get_status(self.instance_name) != "Running":
+                raise RuntimeError(i18n.t("msg_plugin_install_requires_running_instance"))
+
             env = InstallManager.get_runtime_env(
                 instance_path=self.openclaw_home,
                 instance_name=self.instance_name,
@@ -311,6 +315,14 @@ class PluginPanel(QWidget):
         instance_name = self.instance_selector.currentData()
         if not instance_name:
             QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_select_instance_required"))
+            return
+
+        if ProcessManager.get_status(instance_name) != "Running":
+            QMessageBox.warning(
+                self,
+                i18n.t("title_warning"),
+                i18n.t("msg_plugin_install_requires_running_instance"),
+            )
             return
 
         try:

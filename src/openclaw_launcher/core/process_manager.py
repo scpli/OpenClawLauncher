@@ -210,15 +210,25 @@ class ProcessManager:
         log_file.flush()
         
         # Launch process
+        popen_kwargs = {
+            "stdout": log_file,
+            "stderr": subprocess.STDOUT,
+            "stdin": subprocess.DEVNULL,
+            "cwd": str(instance_path),
+            "env": env,
+            "text": True,
+            "bufsize": 1,
+        }
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            popen_kwargs["startupinfo"] = startupinfo
+
         process = subprocess.Popen(
             command,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            cwd=str(instance_path),
-            env=env,
-            text=True,
-            bufsize=1
+            **popen_kwargs,
         )
         
         cls._instances[instance_name] = process

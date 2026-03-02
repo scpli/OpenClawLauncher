@@ -165,6 +165,7 @@
     "msg_plugin_install_failed_short": "插件 {name} 安装失败",
     "msg_plugin_install_failed": "安装插件 {name} 失败：{error}",
     "msg_plugin_install_failed_unknown": "插件安装失败（无详细输出）",
+    "msg_plugin_install_requires_running_instance": "安装插件前请先启动该实例",
     "msg_plugin_node_not_found": "未找到 Node 运行时，请先在“依赖检查”页面安装 Node",
     "msg_openclaw_home_not_found": "未找到 openclaw.mjs，请确认 OpenClaw 已安装",
     "msg_select_instance_required": "请先选择一个实例",
