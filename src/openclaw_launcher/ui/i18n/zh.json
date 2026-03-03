@@ -42,6 +42,7 @@
     "title_update_available": "发现新版本",
     "lbl_logs": "日志",
     "btn_refresh_logs": "刷新日志",
+    "btn_open_logs": "打开日志",
     "btn_clear_logs": "清除日志",
     "lbl_global_repo_url": "全局仓库 URL:",
     "btn_save_repo": "保存仓库 URL",

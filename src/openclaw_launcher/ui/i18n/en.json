@@ -42,6 +42,7 @@
     "title_update_available": "Update Available",
     "lbl_logs": "Logs",
     "btn_refresh_logs": "Refresh Logs",
+    "btn_open_logs": "Open Logs",
     "btn_clear_logs": "Clear Logs",
     "lbl_global_repo_url": "Global Repository URL:",
     "btn_save_repo": "Save Repository URL",
