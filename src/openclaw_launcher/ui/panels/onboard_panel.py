@@ -4,7 +4,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QGroupBox,
     QMessageBox,
 )
 from PySide6.QtCore import QThread, Signal
@@ -16,7 +15,6 @@ from ...core.install_manager import InstallManager
 from ...core.process_manager import ProcessManager
 from ...core.runtime_manager import RuntimeManager
 from ..i18n import i18n
-from .plugin_panel import PluginInstallWorker
 
 
 class InstallDependenciesWorker(QThread):
@@ -81,17 +79,6 @@ class OnboardPanel(QWidget):
     dependencies_ready = Signal()
     sample_ready = Signal()
 
-    RECOMMENDED_PLUGINS = [
-        {
-            "name": "@soimy/dingtalk",
-            "url": "https://github.com/soimy/openclaw-channel-dingtalk",
-        },
-        {
-            "name": "@sliverp/qqbot",
-            "url": "https://github.com/sliverp/qqbot",
-        },
-    ]
-
     SAMPLE_INSTANCE_NAME = "openclaw"
     SAMPLE_INSTANCE_PORT = 18789
 
@@ -99,8 +86,6 @@ class OnboardPanel(QWidget):
         super().__init__()
         self.dep_worker = None
         self.sample_worker = None
-        self.plugin_install_worker = None
-        self.recommended_install_buttons = []
 
         self.layout = QVBoxLayout(self)
 
@@ -170,17 +155,6 @@ class OnboardPanel(QWidget):
         webui_layout.addWidget(self.btn_open_webui)
         self.layout.addLayout(webui_layout)
 
-        # Step 6: recommended plugins
-        plugin_layout = QHBoxLayout()
-        self.lbl_step_plugins = QLabel(i18n.t("onboard_step_plugins"))
-        plugin_layout.addWidget(self.lbl_step_plugins)
-        self.layout.addLayout(plugin_layout)
-
-        self.recommended_group = QGroupBox()
-        self.recommended_layout = QVBoxLayout(self.recommended_group)
-        self.layout.addWidget(self.recommended_group)
-        self._build_recommended_rows()
-
         self.layout.addSpacing(8)
 
         self.lbl_status = QLabel(i18n.t("status_ready"))
@@ -211,113 +185,6 @@ class OnboardPanel(QWidget):
         else:
             title_label.setStyleSheet("")
             status_label.setStyleSheet("")
-
-    def _build_recommended_rows(self):
-        while self.recommended_layout.count():
-            item = self.recommended_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-
-        self.recommended_install_buttons = []
-
-        for plugin in self.RECOMMENDED_PLUGINS:
-            row_widget = QWidget()
-            row_layout = QHBoxLayout(row_widget)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-
-            label = QLabel(plugin["name"])
-            row_layout.addWidget(label)
-            row_layout.addStretch()
-
-            btn_install = QPushButton(i18n.t("btn_install"))
-            btn_install.clicked.connect(
-                lambda checked=False, package_name=plugin["name"]: self.start_recommended_install(package_name)
-            )
-            row_layout.addWidget(btn_install)
-            self.recommended_install_buttons.append(btn_install)
-
-            btn_help = QPushButton(i18n.t("btn_help"))
-            btn_help.clicked.connect(
-                lambda checked=False, url=plugin["url"]: QDesktopServices.openUrl(QUrl(url))
-            )
-            row_layout.addWidget(btn_help)
-
-            self.recommended_layout.addWidget(row_widget)
-
-    def _update_recommended_controls_state(self):
-        can_install = self._sample_running() and self.plugin_install_worker is None
-        for button in self.recommended_install_buttons:
-            button.setEnabled(can_install)
-
-    def _set_plugin_installing_state(self, installing: bool):
-        for button in self.recommended_install_buttons:
-            button.setEnabled((not installing) and self._sample_running())
-
-    def start_recommended_install(self, plugin_name: str):
-        if self.plugin_install_worker:
-            QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_plugin_install_busy"))
-            return
-
-        instance_path = Config.get_instance_path(self.SAMPLE_INSTANCE_NAME)
-        if not instance_path.exists():
-            QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_instance_not_found"))
-            self.refresh_status()
-            return
-
-        if ProcessManager.get_status(self.SAMPLE_INSTANCE_NAME) != "Running":
-            QMessageBox.warning(
-                self,
-                i18n.t("title_warning"),
-                i18n.t("msg_plugin_install_requires_running_instance"),
-            )
-            return
-
-        if not (instance_path / "openclaw.mjs").exists():
-            QMessageBox.critical(self, i18n.t("title_error"), i18n.t("msg_openclaw_home_not_found"))
-            return
-
-        self._set_plugin_installing_state(True)
-        self.lbl_status.setText(i18n.t("msg_plugin_installing", name=plugin_name))
-
-        worker = PluginInstallWorker(
-            openclaw_home=instance_path,
-            plugin_name=plugin_name,
-            instance_name=self.SAMPLE_INSTANCE_NAME,
-        )
-        worker.completed.connect(lambda output, name=plugin_name: self.on_recommended_install_success(name, output))
-        worker.error.connect(lambda error, name=plugin_name: self.on_recommended_install_error(name, error))
-        worker.start()
-        self.plugin_install_worker = worker
-
-    def on_recommended_install_success(self, plugin_name: str, output: str):
-        self.plugin_install_worker = None
-        self._set_plugin_installing_state(False)
-        self.lbl_status.setText(i18n.t("msg_plugin_install_success", name=plugin_name))
-
-        if output:
-            preview = "\n".join(output.splitlines()[-10:])
-            QMessageBox.information(
-                self,
-                i18n.t("title_success"),
-                i18n.t("msg_plugin_install_output", name=plugin_name, output=preview),
-            )
-        else:
-            QMessageBox.information(
-                self,
-                i18n.t("title_success"),
-                i18n.t("msg_plugin_install_success", name=plugin_name),
-            )
-
-    def on_recommended_install_error(self, plugin_name: str, error: str):
-        self.plugin_install_worker = None
-        self._set_plugin_installing_state(False)
-        self.lbl_status.setText(i18n.t("msg_plugin_install_failed_short", name=plugin_name))
-        QMessageBox.critical(
-            self,
-            i18n.t("title_error"),
-            i18n.t("msg_plugin_install_failed", name=plugin_name, error=error),
-        )
 
     def refresh_status(self):
         deps_done = self._dependencies_ok()
@@ -361,8 +228,6 @@ class OnboardPanel(QWidget):
             self.lbl_status.setText(i18n.t("onboard_hint_create_sample"))
         else:
             self.lbl_status.setText(i18n.t("onboard_hint_start_instance"))
-
-        self._update_recommended_controls_state()
 
     def install_dependencies(self):
         if self.dep_worker and self.dep_worker.isRunning():
@@ -488,11 +353,8 @@ class OnboardPanel(QWidget):
         self.lbl_step_start.setText(i18n.t("onboard_step_start_instance"))
         self.lbl_step_webui.setText(i18n.t("onboard_step_open_webui"))
         self.btn_open_webui.setText(i18n.t("onboard_btn_open_webui"))
-        self.lbl_step_plugins.setText(i18n.t("onboard_step_plugins"))
         self.lbl_step_cli.setText(i18n.t("onboard_step_cli_onboard"))
         self.btn_open_onboard_cli.setText(i18n.t("onboard_btn_open_cli_onboard"))
-        self.recommended_group.setTitle(i18n.t("section_recommended_plugins"))
-        self._build_recommended_rows()
         self.refresh_status()
 
     def shutdown(self):
@@ -514,11 +376,3 @@ class OnboardPanel(QWidget):
                 worker.wait(500)
         self.sample_worker = None
 
-        worker = self.plugin_install_worker
-        if worker and worker.isRunning():
-            worker.requestInterruption()
-            worker.wait(1000)
-            if worker.isRunning():
-                worker.terminate()
-                worker.wait(500)
-        self.plugin_install_worker = None

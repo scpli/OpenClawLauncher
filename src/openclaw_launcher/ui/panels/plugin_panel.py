@@ -2,13 +2,16 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -34,8 +37,8 @@ class PluginInstallWorker(QThread):
 
     def run(self):
         try:
-            if ProcessManager.get_status(self.instance_name) != "Running":
-                raise RuntimeError(i18n.t("msg_plugin_install_requires_running_instance"))
+            if ProcessManager.get_status(self.instance_name) == "Running":
+                raise RuntimeError(i18n.t("msg_plugin_install_requires_stopped_instance"))
 
             env = InstallManager.get_runtime_env(
                 instance_path=self.openclaw_home,
@@ -75,9 +78,21 @@ class PluginInstallWorker(QThread):
 
 
 class PluginPanel(QWidget):
+    RECOMMENDED_PLUGINS = [
+        {
+            "name": "@soimy/dingtalk",
+            "url": "https://github.com/soimy/openclaw-channel-dingtalk",
+        },
+        {
+            "name": "@sliverp/qqbot",
+            "url": "https://github.com/sliverp/qqbot",
+        },
+    ]
+
     def __init__(self):
         super().__init__()
         self.install_worker = None
+        self.recommended_install_buttons = []
 
         self.layout = QVBoxLayout(self)
         
@@ -102,6 +117,11 @@ class PluginPanel(QWidget):
         self.status_label = QLabel(i18n.t("status_ready"))
         self.layout.addWidget(self.status_label)
 
+        self.install_progress = QProgressBar()
+        self.install_progress.setVisible(False)
+        self.install_progress.setTextVisible(False)
+        self.layout.addWidget(self.install_progress)
+
         install_row = QHBoxLayout()
         self.plugin_input = QLineEdit()
         self.plugin_input.setPlaceholderText(i18n.t("ph_plugin_name"))
@@ -113,9 +133,54 @@ class PluginPanel(QWidget):
 
         self.layout.addLayout(install_row)
 
+        self.recommended_group = QGroupBox(i18n.t("section_recommended_plugins"))
+        self.recommended_layout = QVBoxLayout(self.recommended_group)
+        self.layout.addWidget(self.recommended_group)
+        self._build_recommended_rows()
+
         self.update_ui_texts()
         self._load_instances()
         self.refresh_plugins()
+
+    def _build_recommended_rows(self):
+        while self.recommended_layout.count():
+            item = self.recommended_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        self.recommended_install_buttons = []
+
+        for plugin in self.RECOMMENDED_PLUGINS:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
+            label = QLabel(plugin["name"])
+            row_layout.addWidget(label)
+            row_layout.addStretch()
+
+            btn_install = QPushButton(i18n.t("btn_install"))
+            btn_install.clicked.connect(
+                lambda checked=False, package_name=plugin["name"]: self.start_recommended_install(package_name)
+            )
+            row_layout.addWidget(btn_install)
+            self.recommended_install_buttons.append(btn_install)
+
+            btn_help = QPushButton(i18n.t("btn_help"))
+            btn_help.clicked.connect(
+                lambda checked=False, url=plugin["url"]: QDesktopServices.openUrl(QUrl(url))
+            )
+            row_layout.addWidget(btn_help)
+
+            self.recommended_layout.addWidget(row_widget)
+
+        self._update_recommended_controls_state()
+
+    def _update_recommended_controls_state(self):
+        enable_install = self._has_selected_instance() and self.install_worker is None
+        for button in self.recommended_install_buttons:
+            button.setEnabled(enable_install)
 
     def _candidate_extension_dirs(self, base_dir: Path):
         return [
@@ -151,6 +216,7 @@ class PluginPanel(QWidget):
     def _update_install_controls_state(self):
         enable_install = self._has_selected_instance() and self.install_worker is None
         self.btn_install.setEnabled(enable_install)
+        self._update_recommended_controls_state()
 
     def _get_selected_instance_path(self) -> Path | None:
         instance_name = self.instance_selector.currentData()
@@ -248,6 +314,9 @@ class PluginPanel(QWidget):
             return
         self.start_install(plugin_name)
 
+    def start_recommended_install(self, plugin_name: str):
+        self.start_install(plugin_name)
+
     def start_install(self, plugin_name: str):
         if self.install_worker:
             QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_plugin_install_busy"))
@@ -262,11 +331,11 @@ class PluginPanel(QWidget):
             QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_select_instance_required"))
             return
 
-        if ProcessManager.get_status(instance_name) != "Running":
+        if ProcessManager.get_status(instance_name) == "Running":
             QMessageBox.warning(
                 self,
                 i18n.t("title_warning"),
-                i18n.t("msg_plugin_install_requires_running_instance"),
+                i18n.t("msg_plugin_install_requires_stopped_instance"),
             )
             return
 
@@ -323,6 +392,14 @@ class PluginPanel(QWidget):
         self.btn_install.setEnabled((not installing) and self._has_selected_instance())
         self.btn_refresh.setEnabled(not installing)
         self.instance_selector.setEnabled(not installing)
+        for button in self.recommended_install_buttons:
+            button.setEnabled((not installing) and self._has_selected_instance())
+        self.install_progress.setVisible(installing)
+        if installing:
+            self.install_progress.setRange(0, 0)
+        else:
+            self.install_progress.setRange(0, 1)
+            self.install_progress.setValue(0)
 
     def update_ui_texts(self):
         self.instance_label.setText(i18n.t("lbl_select_instance"))
@@ -331,6 +408,8 @@ class PluginPanel(QWidget):
         self.plugin_input.setPlaceholderText(i18n.t("ph_plugin_name"))
         self.btn_install.setText(i18n.t("btn_install_plugin"))
         self.btn_refresh.setText(i18n.t("btn_refresh"))
+        self.recommended_group.setTitle(i18n.t("section_recommended_plugins"))
+        self._build_recommended_rows()
         self.refresh_plugins()
 
     def shutdown(self):
