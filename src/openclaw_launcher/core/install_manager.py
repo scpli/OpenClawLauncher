@@ -714,39 +714,14 @@ class InstallManager:
                 shutil.copy2(src_file, dst_file)
 
     @classmethod
-    def _copy_instance_user_content(
-        cls,
-        old_instance_path: Path,
-        new_instance_path: Path,
-        progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
-    ):
-        """Copy user-generated folders from old instance to new instance."""
-        preserve_dirs = {
-            ".openclaw": {"node_modules"},
-            "extension": {"node_modules"},
-            "extensions": {"node_modules"},
-            "skills": {"node_modules"},
-        }
-
-        total = len(preserve_dirs)
-        cls._report_progress(progress_callback, "migration", 0, total, "")
-
-        for idx, (folder_name, ignore_dir_names) in enumerate(preserve_dirs.items(), start=1):
-            src = old_instance_path / folder_name
-            dst = new_instance_path / folder_name
-            logger.info(f"Migrating user content: {src} -> {dst}")
-            cls._merge_directory(src, dst, ignore_dir_names=ignore_dir_names)
-            cls._report_progress(progress_callback, "migration", idx, total, folder_name)
-
-    @classmethod
     def update_instance_to_default_version(
         cls,
         instance_name: str,
         progress_callback: Optional[Callable[[str, int, int, str], None]] = None,
     ):
         """
-        Recreate an instance from default OpenClaw runtime, reinstall dependencies,
-        migrate user folders, and keep old environment unchanged.
+        Update instance by overwriting files from default OpenClaw runtime,
+        then reinstall dependencies while preserving user folders.
         """
         Config.ensure_dirs()
         current_path = Config.get_instance_path(instance_name)
@@ -759,21 +734,48 @@ class InstallManager:
         if not oc_ver:
             raise RuntimeError("No OpenClaw runtime downloaded. Please download it from Dependencies tab.")
 
-        new_instance_name = cls.build_versioned_instance_name(instance_name, oc_ver)
-        new_path = Config.get_instance_path(new_instance_name)
-        if new_path.exists():
-            raise FileExistsError(f"Target instance already exists: {new_instance_name}")
+        source_path = rm.get_runtime_path(RuntimeManager.SOFTWARE_OPENCLAW, oc_ver)
+        if not source_path.exists():
+            raise RuntimeError(f"OpenClaw source path not found: {source_path}")
 
-        instance_port = cls.get_instance_port(current_path)
-        source_gateway_token = cls.get_instance_gateway_token(current_path, instance_name)
-        cls._report_progress(progress_callback, "bootstrap", 0, 0, "")
-        cls.complete_install(
-            new_instance_name,
-            instance_port=instance_port,
-            gateway_token=source_gateway_token,
-        )
-        logger.info(f"Bootstrap finished. Start migrating user folders from {instance_name} to {new_instance_name}")
-        cls._copy_instance_user_content(current_path, new_path, progress_callback=progress_callback)
-        logger.info(f"User folder migration completed for {new_instance_name}")
-        cls._report_progress(progress_callback, "done", 1, 1, new_instance_name)
-        return new_instance_name
+        log_file_path = Config.get_log_file(instance_name)
+        log_file = open(log_file_path, "a", encoding="utf-8")
+
+        try:
+            log_file.write("\n===== Instance update started =====\n")
+            log_file.flush()
+
+            # Report progress: overwriting files
+            cls._report_progress(progress_callback, "overwriting", 0, 0, "")
+            
+            # Merge source files into current instance, overwriting everything except user data
+            cls._merge_directory(source_path, current_path, ignore_dir_names=set())
+            log_file.write("File overwriting completed.\n")
+            log_file.flush()
+            logger.info(f"Overwritten files in {instance_name} from {source_path}")
+
+            # Report progress: reinstalling dependencies
+            cls._report_progress(progress_callback, "reinstalling", 0, 0, "")
+            
+            # Apply Windows A2UI patch if enabled
+            if Config.get_setting("windows_a2ui_patch", False):
+                cls.apply_windows_a2ui_patch(current_path, log_stream=log_file)
+            
+            # Reinstall dependencies
+            cls.install_dependencies(current_path, instance_name, log_stream=log_file)
+            cls.build_frontend(current_path, instance_name, log_stream=log_file)
+            cls.build_backend(current_path, instance_name, log_stream=log_file)
+
+            log_file.write("===== Instance update completed =====\n")
+            log_file.flush()
+            logger.info(f"Update of {instance_name} complete.")
+            cls._report_progress(progress_callback, "done", 1, 1, instance_name)
+        except Exception as e:
+            log_file.write(f"Update failed: {e}\n")
+            log_file.flush()
+            logger.error(f"Update failed: {e}")
+            raise e
+        finally:
+            log_file.close()
+
+        return instance_name

@@ -1,16 +1,20 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, 
-                               QFileDialog, QMessageBox, QLabel)
+                               QFileDialog, QMessageBox, QLabel, QProgressBar)
 from PySide6.QtCore import QThread, Signal
 import shutil
+import zipfile
+import os
 from pathlib import Path
 from datetime import datetime
 from ...core.config import Config
+from ...core.install_manager import InstallManager
 from ..i18n import i18n
 
 
 class BackupCreateWorker(QThread):
     finished = Signal(str)
     error = Signal(str)
+    progress_percentage = Signal(int)
 
     def __init__(self, instance_name: str, source_dir: Path, output_file: Path):
         super().__init__()
@@ -20,7 +24,32 @@ class BackupCreateWorker(QThread):
 
     def run(self):
         try:
-            shutil.make_archive(str(self.output_file), 'zip', str(self.source_dir))
+            self.progress_percentage.emit(10)
+            # Create zip manually to exclude node_modules
+            zip_path = str(self.output_file) + '.zip'
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Collect all files to archive
+                files_to_archive = []
+                for root, dirs, files in os.walk(self.source_dir):
+                    # Skip node_modules directories
+                    if 'node_modules' in dirs:
+                        dirs.remove('node_modules')
+                    
+                    for file in files:
+                        file_path = Path(root) / file
+                        files_to_archive.append(file_path)
+                
+                total_files = len(files_to_archive)
+                for idx, file_path in enumerate(files_to_archive):
+                    arcname = file_path.relative_to(self.source_dir)
+                    zipf.write(file_path, arcname)
+                    
+                    # Update progress (10% to 95%)
+                    progress = 10 + int((idx + 1) / total_files * 85)
+                    self.progress_percentage.emit(progress)
+            
+            self.progress_percentage.emit(100)
             self.finished.emit(self.instance_name)
         except Exception as e:
             self.error.emit(str(e))
@@ -29,6 +58,7 @@ class BackupCreateWorker(QThread):
 class BackupRestoreWorker(QThread):
     finished = Signal(str)
     error = Signal(str)
+    progress_percentage = Signal(int)
 
     def __init__(self, instance_name: str, zip_path: Path, target_dir: Path, remove_existing: bool):
         super().__init__()
@@ -39,9 +69,41 @@ class BackupRestoreWorker(QThread):
 
     def run(self):
         try:
+            self.progress_percentage.emit(10)
             if self.remove_existing and self.target_dir.exists():
                 shutil.rmtree(self.target_dir)
+            
+            self.progress_percentage.emit(30)
             shutil.unpack_archive(str(self.zip_path), str(self.target_dir))
+            
+            self.progress_percentage.emit(60)
+            # Reinstall dependencies after restore
+            log_file_path = Config.get_log_file(self.instance_name)
+            with open(log_file_path, "a", encoding="utf-8") as log_file:
+                log_file.write("\n===== Restoring dependencies after backup restore =====\n")
+                log_file.flush()
+                
+                try:
+                    # Apply Windows A2UI patch if enabled
+                    if Config.get_setting("windows_a2ui_patch", False):
+                        InstallManager.apply_windows_a2ui_patch(
+                            self.target_dir, 
+                            log_stream=log_file
+                        )
+                    
+                    InstallManager.install_dependencies(
+                        self.target_dir, 
+                        self.instance_name, 
+                        log_stream=log_file
+                    )
+                    log_file.write("===== Dependencies restored successfully =====\n")
+                    self.progress_percentage.emit(95)
+                except Exception as e:
+                    log_file.write(f"Warning: Failed to install dependencies: {e}\n")
+                    # Don't fail the restore if dependency installation fails
+                    self.progress_percentage.emit(95)
+            
+            self.progress_percentage.emit(100)
             self.finished.emit(self.instance_name)
         except Exception as e:
             self.error.emit(str(e))
@@ -76,6 +138,12 @@ class BackupPanel(QWidget):
         self.btn_backup.clicked.connect(self.create_backup)
         self.layout.addWidget(self.btn_backup)
         
+        # Backup Progress Bar
+        self.progress_backup = QProgressBar()
+        self.progress_backup.setVisible(False)
+        self.progress_backup.setMaximum(100)
+        self.layout.addWidget(self.progress_backup)
+        
         # Backups List
         self.lbl_backups = QLabel(i18n.t("lbl_existing_backups"))
         self.layout.addWidget(self.lbl_backups)
@@ -85,6 +153,12 @@ class BackupPanel(QWidget):
         self.btn_restore = QPushButton(i18n.t("btn_restore_backup"))
         self.btn_restore.clicked.connect(self.restore_backup)
         self.layout.addWidget(self.btn_restore)
+        
+        # Restore Progress Bar
+        self.progress_restore = QProgressBar()
+        self.progress_restore.setVisible(False)
+        self.progress_restore.setMaximum(100)
+        self.layout.addWidget(self.progress_restore)
 
         self.lbl_status = QLabel()
         self.layout.addWidget(self.lbl_status)
@@ -151,11 +225,18 @@ class BackupPanel(QWidget):
         self._set_status("backup", instance_name)
 
         self.backup_worker = BackupCreateWorker(instance_name, src, output_file)
+        self.backup_worker.progress_percentage.connect(self.on_backup_progress_percentage)
         self.backup_worker.finished.connect(self.on_backup_finished)
         self.backup_worker.error.connect(self.on_backup_error)
+        self.progress_backup.setVisible(True)
+        self.progress_backup.setValue(0)
         self.backup_worker.start()
 
+    def on_backup_progress_percentage(self, percentage: int):
+        self.progress_backup.setValue(percentage)
+
     def on_backup_finished(self, instance_name):
+        self.progress_backup.setVisible(False)
         QMessageBox.information(self, i18n.t("title_success"), i18n.t("msg_backup_success", name=instance_name))
         self.refresh_lists()
         self._set_busy_state(False)
@@ -163,6 +244,7 @@ class BackupPanel(QWidget):
         self.backup_worker = None
 
     def on_backup_error(self, error_msg):
+        self.progress_backup.setVisible(False)
         QMessageBox.critical(self, i18n.t("title_error"), error_msg)
         self._set_busy_state(False)
         self._set_status(None, None)
@@ -193,11 +275,18 @@ class BackupPanel(QWidget):
         self._set_busy_state(True)
         self._set_status("restore", instance_name)
         self.restore_worker = BackupRestoreWorker(instance_name, zip_path, target_dir, remove_existing)
+        self.restore_worker.progress_percentage.connect(self.on_restore_progress_percentage)
         self.restore_worker.finished.connect(self.on_restore_finished)
         self.restore_worker.error.connect(self.on_restore_error)
+        self.progress_restore.setVisible(True)
+        self.progress_restore.setValue(0)
         self.restore_worker.start()
 
+    def on_restore_progress_percentage(self, percentage: int):
+        self.progress_restore.setValue(percentage)
+
     def on_restore_finished(self, instance_name):
+        self.progress_restore.setVisible(False)
         QMessageBox.information(self, i18n.t("title_success"), i18n.t("msg_restore_success", name=instance_name))
         self.refresh_lists()
         self._set_busy_state(False)
@@ -205,6 +294,7 @@ class BackupPanel(QWidget):
         self.restore_worker = None
 
     def on_restore_error(self, error_msg):
+        self.progress_restore.setVisible(False)
         QMessageBox.critical(self, i18n.t("title_error"), error_msg)
         self._set_busy_state(False)
         self._set_status(None, None)

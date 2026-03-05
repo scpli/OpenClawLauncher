@@ -8,10 +8,13 @@ from ...core.process_manager import ProcessManager
 from ...core.install_manager import InstallManager
 from ...core.runtime_manager import RuntimeManager
 from ..i18n import i18n
+from .backup_panel import BackupCreateWorker
 import shutil
 import os
 import stat
 import time
+from pathlib import Path
+from datetime import datetime
 
 class InstanceCreateWorker(QThread):
     finished = Signal()
@@ -58,6 +61,8 @@ class InstancePanel(QWidget):
         super().__init__()
         self.layout = QVBoxLayout(self)
         self.worker = None
+        self.backup_worker = None
+        self._update_instance_name = None
         
         # Instance List
         self.instance_list = QListWidget()
@@ -83,6 +88,12 @@ class InstancePanel(QWidget):
         self.update_progress.setVisible(False)
         self.update_progress.setTextVisible(True)
         self.layout.addWidget(self.update_progress)
+        
+        self.backup_progress = QProgressBar()
+        self.backup_progress.setVisible(False)
+        self.backup_progress.setTextVisible(True)
+        self.backup_progress.setFormat(i18n.t("progress_backup_creating"))
+        self.layout.addWidget(self.backup_progress)
         
         # Refresh logic
         self.refresh_timer = QTimer()
@@ -221,6 +232,88 @@ class InstancePanel(QWidget):
         if res != QMessageBox.Yes:
             return
 
+        # Ask if user wants to backup before updating
+        backup_res = QMessageBox.question(
+            self,
+            i18n.t("title_backup_instance"),
+            i18n.t("msg_backup_before_update", name=name),
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        
+        # Store the instance name for backup error handling
+        self._update_instance_name = name
+        
+        if backup_res == QMessageBox.Yes:
+            self.status_label.setText(i18n.t("msg_backing_up_instance", name=name))
+            self._create_backup_for_update(name)
+        else:
+            self._start_update(name)
+
+    def on_update_progress(self, stage, current, total, detail):
+        if stage == "overwriting":
+            self.update_progress.setRange(0, 0)
+            self.update_progress.setFormat(i18n.t("progress_update_preparing"))
+            return
+
+        if stage == "reinstalling":
+            self.update_progress.setRange(0, 0)
+            self.update_progress.setFormat(i18n.t("progress_update_migrating"))
+            return
+
+        if stage == "done":
+            self.update_progress.setRange(0, 1)
+            self.update_progress.setValue(1)
+            self.update_progress.setFormat(i18n.t("progress_update_done"))
+
+    def _create_backup_for_update(self, name):
+        """Create backup before updating, then proceed with update."""
+        instance_path = Config.get_instance_path(name)
+        
+        backup_dir = Config.BASE_DIR / "backups"
+        if not backup_dir.exists():
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{name}_{timestamp}"
+        output_file = backup_dir / backup_name
+        
+        self.backup_worker = BackupCreateWorker(name, instance_path, output_file)
+        self.backup_worker.progress_percentage.connect(self._on_backup_progress)
+        self.backup_worker.finished.connect(lambda instance_name: self._on_backup_finished_for_update(instance_name))
+        self.backup_worker.error.connect(lambda error_msg: self._on_backup_error_for_update(error_msg))
+        self.backup_progress.setVisible(True)
+        self.backup_progress.setValue(0)
+        self.backup_worker.start()
+
+    def _on_backup_progress(self, percentage: int):
+        """Update backup progress bar."""
+        self.backup_progress.setValue(percentage)
+
+    def _on_backup_finished_for_update(self, instance_name):
+        """After backup completes, start the update."""
+        self.backup_progress.setVisible(False)
+        QMessageBox.information(
+            self,
+            i18n.t("title_success"),
+            i18n.t("msg_backup_success", name=instance_name, path=str(Config.BASE_DIR / "backups")),
+        )
+        self.backup_worker = None
+        self._start_update(instance_name)
+
+    def _on_backup_error_for_update(self, error_msg):
+        """Backup failed, don't proceed with update."""
+        self.backup_progress.setVisible(False)
+        instance_name = getattr(self, '_update_instance_name', 'Unknown')
+        QMessageBox.critical(
+            self,
+            i18n.t("title_error"),
+            i18n.t("msg_backup_error", name=instance_name, error=error_msg),
+        )
+        self.backup_worker = None
+        self.status_label.setText(i18n.t("status_ready"))
+
+    def _start_update(self, name):
+        """Start the actual instance update."""
         self.status_label.setText(i18n.t("msg_updating_instance", name=name))
         self.btn_create.setEnabled(False)
         self.update_progress.setVisible(True)
@@ -232,30 +325,6 @@ class InstancePanel(QWidget):
         self.worker.error.connect(lambda msg: self.on_update_error(name, msg))
         self.worker.progress.connect(self.on_update_progress)
         self.worker.start()
-
-    def on_update_progress(self, stage, current, total, detail):
-        if stage == "bootstrap":
-            self.update_progress.setRange(0, 0)
-            self.update_progress.setFormat(i18n.t("progress_update_preparing"))
-            return
-
-        if stage == "migration":
-            if total <= 0:
-                self.update_progress.setRange(0, 0)
-                self.update_progress.setFormat(i18n.t("progress_update_migrating"))
-            else:
-                self.update_progress.setRange(0, total)
-                self.update_progress.setValue(current)
-                self.update_progress.setFormat(i18n.t("progress_update_fraction", current=current, total=total))
-
-            if detail:
-                self.status_label.setText(i18n.t("msg_update_migrating_step", item=detail, current=current, total=total))
-            return
-
-        if stage == "done":
-            self.update_progress.setRange(0, 1)
-            self.update_progress.setValue(1)
-            self.update_progress.setFormat(i18n.t("progress_update_done"))
 
     def _get_missing_dependencies(self):
         missing = []
@@ -284,8 +353,8 @@ class InstancePanel(QWidget):
          self.btn_create.setEnabled(True)
          self.worker = None
 
-    def on_update_finished(self, name, new_name):
-        self.status_label.setText(i18n.t("msg_update_success", name=name, new_name=new_name))
+    def on_update_finished(self, name, updated_name):
+        self.status_label.setText(i18n.t("msg_update_success", name=name, new_name=updated_name))
         self.update_progress.setVisible(False)
         self.refresh_instances()
         self.btn_create.setEnabled(True)

@@ -68,7 +68,7 @@
     "msg_confirm_delete": "确认要删除 {name} 吗?",
     "msg_delete_manual_cleanup_hint": "删除实例 {name} 时发生错误，可能有残留文件需要手动清理。\n\n目录：{path}\n错误：{error}",
     "msg_delete_manual_cleanup_detected": "实例 {name} 删除后仍检测到残留目录，请手动清理。\n\n目录：{path}",
-    "msg_confirm_update_version": "确认更新实例 {name} 到默认版本吗？\n\n将会基于默认版本新建环境（名称自动为“原名+版本号”，若原名已带版本号会先去掉），安装依赖，并迁移 .openclaw、extension/extensions、skills。原环境会保留。",
+    "msg_confirm_update_version": "确认更新实例 {name} 到默认版本吗？",
     "msg_update_requires_stop": "请先停止实例 {name}，再执行版本更新。",
     "msg_updating_instance": "正在更新实例 {name} 到默认版本（可能需要一段时间）...",
     "msg_update_migrating_step": "正在迁移 {item}（{current}/{total}）...",
@@ -79,6 +79,7 @@
     "progress_update_migrating": "迁移数据中...",
     "progress_update_fraction": "迁移进度 {current}/{total}",
     "progress_update_done": "更新完成",
+    "progress_backup_creating": "创建备份中...",
     "title_confirm": "确认删除",
     "title_confirm_update": "确认更新",
     "header_advanced_settings": "高级设置",
@@ -229,7 +230,15 @@
     "onboard_msg_webui_opened": "已打开 WebUI：{url}",
     "onboard_btn_open_cli_onboard": "启动初始化命令行",
     "onboard_msg_cli_opened": "已打开初始化命令行程序。",
-    "onboard_msg_cli_open_failed": "打开初始化命令行程序失败：{error}"
-    ,"msg_log_read_error": "读取日志失败: {error}"
-    ,"msg_no_logs_found": "该实例暂无日志"
+    "onboard_msg_cli_open_failed": "打开初始化命令行程序失败：{error}",
+    "title_backup_instance": "备份实例",
+    "msg_backup_before_update": "更新前是否需要备份 {name}？备份后如果更新出现问题可以恢复到原来的版本,按内容大小可能需要几分钟。",
+    "msg_backing_up_instance": "正在备份实例 {name}...",
+    "msg_backup_already_exists": "已存在 {name} 的备份，是否覆盖？",
+    "msg_backup_success": "实例 {name} 已成功备份到 {path}",
+    "msg_backup_completed": "实例 {name} 的备份已完成。",
+    "msg_backup_error": "备份实例 {name} 失败：{error}",
+    "msg_backup_failed": "实例 {name} 的备份失败。",
+    "msg_log_read_error": "读取日志失败: {error}",
+    "msg_no_logs_found": "该实例暂无日志"
 }

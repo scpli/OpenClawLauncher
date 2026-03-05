@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QMessageBox,
+    QProgressBar,
 )
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QDesktopServices
@@ -21,6 +22,7 @@ class InstallDependenciesWorker(QThread):
     completed = Signal()
     error = Signal(str)
     progress = Signal(str)
+    progress_percentage = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -37,12 +39,15 @@ class InstallDependenciesWorker(QThread):
 
                 node_target = str(node_versions[0]["version"])
                 self.progress.emit(i18n.t("onboard_status_installing_dep", name=i18n.t("runtime_node"), version=node_target))
+                self.progress_percentage.emit(25)
                 manager.install_version(RuntimeManager.SOFTWARE_NODE, node_target)
+                self.progress_percentage.emit(50)
                 manager.set_default_version(RuntimeManager.SOFTWARE_NODE, node_target)
 
             # OpenClaw runtime
             if not manager.get_default_version(RuntimeManager.SOFTWARE_OPENCLAW):
                 self.progress.emit(i18n.t("onboard_status_refresh_openclaw"))
+                self.progress_percentage.emit(60)
                 manager.refresh_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
                 openclaw_versions = manager.get_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
                 if not openclaw_versions:
@@ -50,9 +55,12 @@ class InstallDependenciesWorker(QThread):
 
                 openclaw_target = str(openclaw_versions[0]["version"])
                 self.progress.emit(i18n.t("onboard_status_installing_dep", name=i18n.t("runtime_openclaw"), version=openclaw_target))
+                self.progress_percentage.emit(80)
                 manager.install_version(RuntimeManager.SOFTWARE_OPENCLAW, openclaw_target)
+                self.progress_percentage.emit(95)
                 manager.set_default_version(RuntimeManager.SOFTWARE_OPENCLAW, openclaw_target)
 
+            self.progress_percentage.emit(100)
             self.completed.emit()
         except Exception as e:
             self.error.emit(str(e))
@@ -61,6 +69,7 @@ class InstallDependenciesWorker(QThread):
 class CreateSampleWorker(QThread):
     completed = Signal()
     error = Signal(str)
+    progress_percentage = Signal(int)
 
     def __init__(self, instance_name: str, instance_port: int):
         super().__init__()
@@ -69,7 +78,9 @@ class CreateSampleWorker(QThread):
 
     def run(self):
         try:
+            self.progress_percentage.emit(50)
             InstallManager.complete_install(self.instance_name, self.instance_port)
+            self.progress_percentage.emit(100)
             self.completed.emit()
         except Exception as e:
             self.error.emit(str(e))
@@ -111,6 +122,12 @@ class OnboardPanel(QWidget):
         dep_layout.addWidget(self.btn_install_deps)
         self.layout.addLayout(dep_layout)
 
+        # Step 1 Progress Bar
+        self.progress_dep = QProgressBar()
+        self.progress_dep.setVisible(False)
+        self.progress_dep.setMaximum(100)
+        self.layout.addWidget(self.progress_dep)
+
         # Step 2: sample instance
         sample_layout = QHBoxLayout()
         self.lbl_step_sample = QLabel(i18n.t("onboard_step_sample"))
@@ -122,6 +139,12 @@ class OnboardPanel(QWidget):
         self.btn_create_sample.clicked.connect(self.create_sample)
         sample_layout.addWidget(self.btn_create_sample)
         self.layout.addLayout(sample_layout)
+
+        # Step 2 Progress Bar
+        self.progress_sample = QProgressBar()
+        self.progress_sample.setVisible(False)
+        self.progress_sample.setMaximum(100)
+        self.layout.addWidget(self.progress_sample)
 
         # Step 3: launch onboard CLI command
         cli_layout = QHBoxLayout()
@@ -235,22 +258,30 @@ class OnboardPanel(QWidget):
 
         self.dep_worker = InstallDependenciesWorker()
         self.dep_worker.progress.connect(self.on_dep_progress)
+        self.dep_worker.progress_percentage.connect(self.on_dep_progress_percentage)
         self.dep_worker.completed.connect(self.on_dep_finished)
         self.dep_worker.error.connect(self.on_dep_error)
         self.dep_worker.start()
+        self.progress_dep.setVisible(True)
+        self.progress_dep.setValue(0)
         self.refresh_status()
 
     def on_dep_progress(self, message: str):
         self.lbl_status.setText(message)
 
+    def on_dep_progress_percentage(self, percentage: int):
+        self.progress_dep.setValue(percentage)
+
     def on_dep_finished(self):
         self.dep_worker = None
+        self.progress_dep.setVisible(False)
         QMessageBox.information(self, i18n.t("title_success"), i18n.t("onboard_msg_dependencies_done"))
         self.dependencies_ready.emit()
         self.refresh_status()
 
     def on_dep_error(self, error: str):
         self.dep_worker = None
+        self.progress_dep.setVisible(False)
         QMessageBox.critical(self, i18n.t("title_error"), i18n.t("onboard_msg_dependencies_failed", error=error))
         self.refresh_status()
 
@@ -267,14 +298,18 @@ class OnboardPanel(QWidget):
             return
 
         self.sample_worker = CreateSampleWorker(self.SAMPLE_INSTANCE_NAME, self.SAMPLE_INSTANCE_PORT)
+        self.sample_worker.progress_percentage.connect(self.on_sample_progress_percentage)
         self.sample_worker.completed.connect(self.on_sample_finished)
         self.sample_worker.error.connect(self.on_sample_error)
         self.sample_worker.start()
         self.lbl_status.setText(i18n.t("onboard_status_creating_sample", name=self.SAMPLE_INSTANCE_NAME))
+        self.progress_sample.setVisible(True)
+        self.progress_sample.setValue(0)
         self.refresh_status()
 
     def on_sample_finished(self):
         self.sample_worker = None
+        self.progress_sample.setVisible(False)
         QMessageBox.information(
             self,
             i18n.t("title_success"),
@@ -283,8 +318,12 @@ class OnboardPanel(QWidget):
         self.sample_ready.emit()
         self.refresh_status()
 
+    def on_sample_progress_percentage(self, percentage: int):
+        self.progress_sample.setValue(percentage)
+
     def on_sample_error(self, error: str):
         self.sample_worker = None
+        self.progress_sample.setVisible(False)
         QMessageBox.critical(self, i18n.t("title_error"), i18n.t("onboard_msg_sample_failed", error=error))
         self.refresh_status()
 
