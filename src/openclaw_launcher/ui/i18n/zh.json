@@ -93,8 +93,6 @@
     "tray_quit": "退出",
     "lbl_check_updates": "实例版本更新检查",
     "desc_check_updates": "启用后在面板中提示可用的版本更新",
-    "lbl_keep_alive": "退出时保留实例运行状态",
-    "desc_keep_alive": "启用后关闭应用时记录运行中的实例",
     "lbl_windows_patch": "Windows 支持补丁",
     "desc_windows_patch": "安装依赖前写入 A2UI 占位包（仅 Windows）",
     "lbl_auto_start": "开机自启动",

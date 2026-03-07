@@ -271,9 +271,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-        keep_alive = Config.get_setting("keep_alive", False)
-        if not keep_alive:
-            ProcessManager.stop_all_instances()
+        ProcessManager.stop_all_instances()
 
         if getattr(self, "tray_icon", None):
             self.tray_icon.hide()
