@@ -680,6 +680,10 @@ class InstallManager:
                 if isinstance(workspace_obj, str) and workspace_obj.strip():
                     preserved_workspace = workspace_obj
 
+        config_data["tools"] = {
+            "profile": "full"
+        }
+
         config_data["browser"] = {
             "defaultProfile": "openclaw"
         }
