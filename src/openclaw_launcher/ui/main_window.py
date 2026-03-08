@@ -10,7 +10,7 @@ from .panels.backup_panel import BackupPanel
 from .panels.log_panel import LogPanel
 from .panels.advanced_panel import AdvancedPanel
 from .panels.plugin_panel import PluginPanel
-from .panels.ai_model_panel import AIModelPanel
+from .panels.ai_model_panel import LlamaCppTab, ModelSwitchTab
 from ..core.config import Config
 from ..core.process_manager import ProcessManager
 from ..core.runtime_manager import RuntimeManager
@@ -105,7 +105,8 @@ class MainWindow(QMainWindow):
         self.log_panel = LogPanel()
         self.plugin_panel = PluginPanel()
         self.advanced_panel = AdvancedPanel()
-        self.ai_model_panel = AIModelPanel()
+        self.llamacpp_panel = LlamaCppTab(self)
+        self.model_switch_panel = ModelSwitchTab(self)
 
         self.onboard_panel.dependencies_ready.connect(self.dependency_panel.refresh_all_cards)
         self.onboard_panel.sample_ready.connect(self.instance_panel.refresh_instances)
@@ -117,7 +118,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.backup_panel, i18n.t("tab_backups"))
         self.tabs.addTab(self.log_panel, i18n.t("tab_logs"))
         self.tabs.addTab(self.plugin_panel, i18n.t("tab_plugins"))
-        self.tabs.addTab(self.ai_model_panel, i18n.t("tab_ai_model"))
+        self.tabs.addTab(self.llamacpp_panel, i18n.t("tab_llamacpp"))
+        self.tabs.addTab(self.model_switch_panel, i18n.t("tab_model_switch"))
         self.tabs.addTab(self.advanced_panel, i18n.t("tab_advanced"))
         
         self.layout.addWidget(self.tabs)
@@ -170,7 +172,7 @@ class MainWindow(QMainWindow):
     def on_language_changed(self, lang):
         self.update_ui_texts()
         # Propagate to panels if they have update_ui_texts method
-        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.ai_model_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
             if hasattr(panel, 'update_ui_texts'):
                 panel.update_ui_texts()
 
@@ -209,8 +211,9 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(3, i18n.t("tab_backups"))
         self.tabs.setTabText(4, i18n.t("tab_logs"))
         self.tabs.setTabText(5, i18n.t("tab_plugins"))
-        self.tabs.setTabText(6, i18n.t("tab_ai_model"))
-        self.tabs.setTabText(7, i18n.t("tab_advanced"))
+        self.tabs.setTabText(6, i18n.t("tab_llamacpp"))
+        self.tabs.setTabText(7, i18n.t("tab_model_switch"))
+        self.tabs.setTabText(8, i18n.t("tab_advanced"))
         if hasattr(self, "tray_icon") and self.tray_icon:
             self.tray_icon.setToolTip(i18n.t("app_title"))
         if hasattr(self, "action_show") and self.action_show:
@@ -267,7 +270,7 @@ class MainWindow(QMainWindow):
             worker.wait(1000)
         self._update_check_worker = None
 
-        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.ai_model_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
             shutdown = getattr(panel, "shutdown", None)
             if callable(shutdown):
                 try:

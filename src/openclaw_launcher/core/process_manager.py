@@ -324,6 +324,24 @@ class ProcessManager:
         return "Running"
 
     @classmethod
+    def get_all_instances(cls) -> list[dict[str, str]]:
+        """Return all local instances with their current runtime status."""
+        Config.ensure_dirs()
+
+        instances = []
+        for item in sorted(Config.INSTANCES_DIR.iterdir(), key=lambda p: p.name.lower()):
+            if not item.is_dir():
+                continue
+            instances.append(
+                {
+                    "name": item.name,
+                    "status": cls.get_status(item.name),
+                    "path": str(item),
+                }
+            )
+        return instances
+
+    @classmethod
     def has_running_instances(cls) -> bool:
         """Return True if any tracked instance process is still running."""
         for instance_name in list(cls._instances.keys()):
