@@ -30,3 +30,4 @@ config.json
 
 # uv lock files
 *.lock
+llama/

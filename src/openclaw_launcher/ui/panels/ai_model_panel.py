@@ -30,42 +30,52 @@ ONLINE_PROVIDERS = {
     },
     "openai": {
         "base_url": "https://api.openai.com/v1",
-        "default_model": "gpt-4o",
+        "default_model": "gpt-5.3-codex",
         "requires_key": True,
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "default_model": "gemini-2.5-pro",
+        "default_model": "gemini-3-flash-preview",
         "requires_key": True,
     },
     "grok": {
         "base_url": "https://api.x.ai/v1",
-        "default_model": "grok-3-latest",
+        "default_model": "grok-4-1-fast-non-reasoning",
         "requires_key": True,
     },
     "glm_intl": {
         "base_url": "https://api.z.ai/api/paas",
-        "default_model": "glm-4-flash",
+        "default_model": "glm-4.7",
         "requires_key": True,
     },
     "glm": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "default_model": "glm-4-flash",
+        "default_model": "glm-4.7",
         "requires_key": True,
     },
     "aliyun": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "default_model": "qwen-max",
+        "default_model": "qwen3-coder-next",
+        "requires_key": True,
+    },
+    "aliyun_coding": {
+        "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+        "default_model": "qwen3-coder-next",
         "requires_key": True,
     },
     "doubao": {
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "default_model": "doubao-pro-128k",
+        "default_model": "doubao-seed-2.0-code",
+        "requires_key": True,
+    },
+    "doubao_coding": {
+        "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "default_model": "ark-code-latest",
         "requires_key": True,
     },
     "ollama": {
         "base_url": "http://localhost:11434/v1",
-        "default_model": "llama3.1",
+        "default_model": "qwen3.5",
         "requires_key": False,
     },
     "llamacpp": {
@@ -105,13 +115,13 @@ class ModelSwitchWorker(QThread):
 
             # 1. 检查实例是否运行中
             self.progress.emit(i18n.t("model_switch_checking_status"))
-            if ProcessManager.is_instance_running(self.instance_name):
+            if ProcessManager.get_status(self.instance_name) == "Running":
                 self.progress.emit(i18n.t("model_switch_stopping_instance"))
                 ProcessManager.stop_instance(self.instance_name)
                 # 等待实例完全停止
                 import time
                 for _ in range(30):  # 最多等待30秒
-                    if not ProcessManager.is_instance_running(self.instance_name):
+                    if ProcessManager.get_status(self.instance_name) != "Running":
                         break
                     time.sleep(1)
                 else:
@@ -123,7 +133,7 @@ class ModelSwitchWorker(QThread):
 
             # 3. 启动实例
             self.progress.emit(i18n.t("model_switch_starting_instance"))
-            ProcessManager.start_instance(self.instance_name)
+            ProcessManager.start_instance(self.instance_name, instance_path)
 
             self.finished_success.emit()
 
