@@ -6,6 +6,7 @@ block_cipher = None
 
 datas = [
     ("src/openclaw_launcher/ui/i18n", "openclaw_launcher/ui/i18n"),
+    ("llama", "llama"),
     ("logo.png", "."),
 ]
 
