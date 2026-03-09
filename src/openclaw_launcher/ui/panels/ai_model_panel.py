@@ -131,10 +131,6 @@ class ModelSwitchWorker(QThread):
             self.progress.emit(i18n.t("model_switch_updating_config"))
             self._update_openclaw_config(instance_path)
 
-            # 3. 启动实例
-            self.progress.emit(i18n.t("model_switch_starting_instance"))
-            ProcessManager.start_instance(self.instance_name, instance_path)
-
             self.finished_success.emit()
 
         except Exception as e:

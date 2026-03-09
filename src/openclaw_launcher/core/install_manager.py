@@ -713,15 +713,15 @@ package-import-method=copy
 
         config_data["models"] = {
             "providers": {
-                "moonshot": {
-                    "baseUrl": "https://api.moonshot.cn/v1",
-                    "apiKey": "__OPENCLAW_REDACTED__",
+                "llamacpp": {
+                    "baseUrl": "http://localhost:8989/v1",
+                    "apiKey": "not-required",
                     "auth": "api-key",
                     "api": "openai-completions",
                     "models": [
                         {
-                            "id": "kimi-k2.5",
-                            "name": "kimi-k2.5",
+                            "id": "local-model",
+                            "name": "local-model",
                             "api": "openai-completions",
                             "reasoning": False,
                             "input": [
@@ -746,10 +746,10 @@ package-import-method=copy
 
         defaults_config = {
             "model": {
-                "primary": "moonshot/kimi-k2.5"
+                "primary": "llamacpp/local-model"
             },
             "models": {
-                "moonshot/kimi-k2.5": {}
+                "llamacpp/local-model": {}
             },
             "compaction": {
                 "mode": "safeguard"
