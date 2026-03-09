@@ -9,6 +9,7 @@ import urllib.request
 import urllib.parse
 import ssl
 import sys
+import re
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -74,6 +75,8 @@ class RuntimeManager:
                 continue
 
             date = str(item.get("date", "Unknown")).strip() or "Unknown"
+            if date == "Unknown":
+                date = self._date_from_openclaw_tag(version)
             url = str(item.get("url", "")).strip()
             entry = {
                 "version": version,
@@ -114,6 +117,21 @@ class RuntimeManager:
         if not parts:
             return (0, 0)
         return (0, *parts)
+
+    def _date_from_openclaw_tag(self, tag: str) -> str:
+        normalized = str(tag).strip().lower()
+        if normalized.startswith("v"):
+            normalized = normalized[1:]
+
+        match = re.match(r"^(\d{4})[._-](\d{1,2})[._-](\d{1,2})(?:[._-].*)?$", normalized)
+        if not match:
+            return "Unknown"
+
+        try:
+            year, month, day = map(int, match.groups())
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            return "Unknown"
 
     def _get_github_proxy(self) -> str:
         from .config import Config
@@ -288,11 +306,9 @@ class RuntimeManager:
             candidates = []
             for item in payload:
                 tag = str(item.get("name", "")).strip()
-                sha = str(item.get("commit", {}).get("sha", "")).strip()
                 if tag.startswith("v"):
                     candidates.append({
                         "version": tag,
-                        "sha": sha,
                         "url": f"https://github.com/openclaw/openclaw/archive/refs/tags/{tag}.zip"
                     })
 
@@ -300,23 +316,9 @@ class RuntimeManager:
             candidates = candidates[:10]
 
             for item in candidates:
-                commit_date = "Unknown"
-                sha = item.get("sha", "")
-                if sha:
-                    try:
-                        commit_api_url = f"https://api.github.com/repos/openclaw/openclaw/commits/{sha}"
-                        commit_payload = _github_json_get(commit_api_url)
-                        raw_date = str(commit_payload.get("commit", {}).get("committer", {}).get("date", "")).strip()
-                        if "T" in raw_date:
-                            commit_date = raw_date.split("T", 1)[0]
-                        elif raw_date:
-                            commit_date = raw_date
-                    except Exception as commit_error:
-                        logger.warning(f"Failed to fetch commit date for {item['version']}: {commit_error}")
-
                 versions.append({
                     "version": item["version"],
-                    "date": commit_date,
+                    "date": self._date_from_openclaw_tag(item["version"]),
                     "url": item["url"],
                 })
 
