@@ -4,6 +4,7 @@ import subprocess
 import os
 import stat
 import time
+import json
 
 from PySide6.QtCore import QThread, Signal, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -124,8 +125,8 @@ class PluginUninstallWorker(QThread):
 class PluginPanel(QWidget):
     RECOMMENDED_PLUGINS = [
         {
-            "name": "@soimy/dingtalk",
-            "url": "https://github.com/soimy/openclaw-channel-dingtalk",
+            "name": "@dingtalk-real-ai/dingtalk-connector",
+            "url": "https://github.com/DingTalk-Real-AI/dingtalk-openclaw-connector",
         },
         {
             "name": "@sliverp/qqbot",
@@ -490,8 +491,23 @@ class PluginPanel(QWidget):
     def on_install_success(self, plugin_name: str, output: str):
         self._set_installing_state(False)
         self.install_worker = None
+
+        config_apply_error = None
+        try:
+            self._apply_plugin_default_channel_config(plugin_name)
+        except Exception as e:
+            config_apply_error = str(e)
+
         self.status_label.setText(i18n.t("msg_plugin_install_success", name=plugin_name))
         self.refresh_plugins()
+
+        if config_apply_error:
+            QMessageBox.warning(
+                self,
+                i18n.t("title_warning"),
+                f"{i18n.t('msg_plugin_install_success', name=plugin_name)}\n\n"
+                f"写入默认 channels 配置失败：{config_apply_error}",
+            )
 
         if output:
             preview = "\n".join(output.splitlines()[-10:])
@@ -516,6 +532,72 @@ class PluginPanel(QWidget):
             i18n.t("title_error"),
             i18n.t("msg_plugin_install_failed", name=plugin_name, error=error),
         )
+
+    def _apply_plugin_default_channel_config(self, plugin_name: str):
+        normalized = plugin_name.strip().lower()
+        default_entry = None
+
+        if normalized == "qqbot" or normalized.endswith("/qqbot"):
+            default_entry = (
+                "qqbot",
+                {
+                    "enabled": True,
+                    "appId": "Your AppID",
+                    "clientSecret": "Your AppSecret",
+                },
+            )
+        elif normalized == "dingtalk-connector" or normalized.endswith("/dingtalk-connector"):
+            instance_path = self._get_selected_instance_path()
+            instance_name = self.instance_selector.currentData()
+            if not instance_path or not instance_name:
+                return
+
+            gateway_token = InstallManager.get_instance_gateway_token(instance_path, instance_name)
+            default_entry = (
+                "dingtalk-connector",
+                {
+                    "enabled": True,
+                    "clientId": "Your client id",
+                    "clientSecret": "your secret",
+                    "gatewayToken": gateway_token,
+                },
+            )
+
+        if default_entry is None:
+            return
+
+        instance_path = self._get_selected_instance_path()
+        if not instance_path:
+            return
+
+        config_path = instance_path / ".openclaw" / "openclaw.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        config_data = {}
+        if config_path.exists():
+            loaded = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                config_data = loaded
+
+        channels_obj = config_data.get("channels")
+        if not isinstance(channels_obj, dict):
+            channels_obj = {}
+
+        channel_key, defaults = default_entry
+        existing = channels_obj.get(channel_key)
+        if not isinstance(existing, dict):
+            existing = {}
+
+        merged = dict(existing)
+        for key, value in defaults.items():
+            if key == "enabled":
+                merged[key] = True
+            elif key not in merged:
+                merged[key] = value
+
+        channels_obj[channel_key] = merged
+        config_data["channels"] = channels_obj
+        config_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     def _set_installing_state(self, installing: bool):
         self.btn_install.setEnabled((not installing) and self._has_selected_instance() and self.uninstall_worker is None)
