@@ -10,6 +10,7 @@ from .panels.backup_panel import BackupPanel
 from .panels.log_panel import LogPanel
 from .panels.advanced_panel import AdvancedPanel
 from .panels.plugin_panel import PluginPanel
+from .panels.channel_config_panel import ChannelConfigPanel
 from .panels.ai_model_panel import LlamaCppTab, ModelSwitchTab
 from ..core.config import Config
 from ..core.process_manager import ProcessManager
@@ -46,8 +47,10 @@ class OpenClawUpdateCheckWorker(QThread):
         try:
             manager = RuntimeManager()
             current_version = manager.get_default_version(RuntimeManager.SOFTWARE_OPENCLAW) or ""
-            manager.refresh_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
             available = manager.get_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
+            if not available:
+                manager.refresh_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
+                available = manager.get_available_versions(RuntimeManager.SOFTWARE_OPENCLAW)
             if available:
                 latest_version = str(available[0].get("version", "")).strip()
 
@@ -73,26 +76,31 @@ class MainWindow(QMainWindow):
         
         # Main Layout
         self.central_widget = QWidget()
+        self.central_widget.setObjectName("MainRoot")
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
 
         # Header with Language + Theme Switch
-        header_layout = QHBoxLayout()
+        self.top_bar = QWidget()
+        self.top_bar.setObjectName("TopBar")
+        header_layout = QHBoxLayout(self.top_bar)
         self.title_label = QLabel(i18n.t("app_title"))
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        self.title_label.setObjectName("AppTitleLabel")
         header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
 
         self.theme_btn = QPushButton()
+        self.theme_btn.setObjectName("ToolButton")
         self.theme_btn.clicked.connect(self.toggle_theme_mode)
         header_layout.addWidget(self.theme_btn)
         
         self.lang_btn = QPushButton(i18n.t("lang_switch"))
+        self.lang_btn.setObjectName("ToolButton")
         self.lang_btn.clicked.connect(self.toggle_language)
         header_layout.addWidget(self.lang_btn)
         
-        self.layout.addLayout(header_layout)
+        self.layout.addWidget(self.top_bar)
         
         # Tabs
         self.tabs = QTabWidget()
@@ -104,6 +112,7 @@ class MainWindow(QMainWindow):
         self.backup_panel = BackupPanel()
         self.log_panel = LogPanel()
         self.plugin_panel = PluginPanel()
+        self.channel_config_panel = ChannelConfigPanel()
         self.advanced_panel = AdvancedPanel()
         self.llamacpp_panel = LlamaCppTab(self)
         self.model_switch_panel = ModelSwitchTab(self)
@@ -118,6 +127,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.backup_panel, i18n.t("tab_backups"))
         self.tabs.addTab(self.log_panel, i18n.t("tab_logs"))
         self.tabs.addTab(self.plugin_panel, i18n.t("tab_plugins"))
+        self.tabs.addTab(self.channel_config_panel, i18n.t("tab_channels"))
         self.tabs.addTab(self.llamacpp_panel, i18n.t("tab_llamacpp"))
         self.tabs.addTab(self.model_switch_panel, i18n.t("tab_model_switch"))
         self.tabs.addTab(self.advanced_panel, i18n.t("tab_advanced"))
@@ -172,7 +182,7 @@ class MainWindow(QMainWindow):
     def on_language_changed(self, lang):
         self.update_ui_texts()
         # Propagate to panels if they have update_ui_texts method
-        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.channel_config_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
             if hasattr(panel, 'update_ui_texts'):
                 panel.update_ui_texts()
 
@@ -211,9 +221,10 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(3, i18n.t("tab_backups"))
         self.tabs.setTabText(4, i18n.t("tab_logs"))
         self.tabs.setTabText(5, i18n.t("tab_plugins"))
-        self.tabs.setTabText(6, i18n.t("tab_llamacpp"))
-        self.tabs.setTabText(7, i18n.t("tab_model_switch"))
-        self.tabs.setTabText(8, i18n.t("tab_advanced"))
+        self.tabs.setTabText(6, i18n.t("tab_channels"))
+        self.tabs.setTabText(7, i18n.t("tab_llamacpp"))
+        self.tabs.setTabText(8, i18n.t("tab_model_switch"))
+        self.tabs.setTabText(9, i18n.t("tab_advanced"))
         if hasattr(self, "tray_icon") and self.tray_icon:
             self.tray_icon.setToolTip(i18n.t("app_title"))
         if hasattr(self, "action_show") and self.action_show:
@@ -270,7 +281,7 @@ class MainWindow(QMainWindow):
             worker.wait(1000)
         self._update_check_worker = None
 
-        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
+        for panel in [self.onboard_panel, self.instance_panel, self.dependency_panel, self.backup_panel, self.log_panel, self.plugin_panel, self.channel_config_panel, self.llamacpp_panel, self.model_switch_panel, self.advanced_panel]:
             shutdown = getattr(panel, "shutdown", None)
             if callable(shutdown):
                 try:
