@@ -1,8 +1,8 @@
-from PySide6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                                QSystemTrayIcon, QMenu, QPushButton, QHBoxLayout, QLabel,
-                               QStyle, QApplication, QMessageBox)
+                               QStyle, QApplication, QMessageBox, QStackedWidget, QSplitter)
 from PySide6.QtGui import QIcon, QAction
-from PySide6.QtCore import QEvent, QTimer, QThread, Signal
+from PySide6.QtCore import QEvent, QTimer, QThread, Signal, Qt, QPropertyAnimation, QEasingCurve, QSize
 from .panels.onboard_panel import OnboardPanel
 from .panels.instance_panel import InstancePanel
 from .panels.dependency_panel import DependencyPanel
@@ -17,6 +17,7 @@ from ..core.process_manager import ProcessManager
 from ..core.runtime_manager import RuntimeManager
 from .i18n import i18n
 from .theme_manager import theme_manager
+from .sidebar_nav import SidebarNav
 
 
 class OpenClawUpdateCheckWorker(QThread):
@@ -69,7 +70,9 @@ class MainWindow(QMainWindow):
         self._is_shutting_down = False
         self._update_check_worker = None
         self.setWindowTitle("OpenClaw Launcher")
-        self.resize(1000, 700)
+        self.resize(1200, 700)
+        self._sidebar_width = 200
+        self._sidebar_collapsed = False
         
         # Ensure Dirs
         Config.ensure_dirs()
@@ -78,12 +81,26 @@ class MainWindow(QMainWindow):
         self.central_widget = QWidget()
         self.central_widget.setObjectName("MainRoot")
         self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
+        main_layout = QVBoxLayout(self.central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # Header with Language + Theme Switch
         self.top_bar = QWidget()
         self.top_bar.setObjectName("TopBar")
         header_layout = QHBoxLayout(self.top_bar)
+        header_layout.setContentsMargins(10, 5, 10, 5)
+        
+        # Sidebar toggle button
+        self.sidebar_toggle_btn = QPushButton("☰")
+        self.sidebar_toggle_btn.setObjectName("SidebarToggleButton")
+        self.sidebar_toggle_btn.setFixedSize(34, 34)
+        self.sidebar_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self.sidebar_toggle_btn.clicked.connect(self.toggle_sidebar)
+        header_layout.addWidget(self.sidebar_toggle_btn)
+        
+        header_layout.addSpacing(10)
+        
         self.title_label = QLabel(i18n.t("app_title"))
         self.title_label.setObjectName("AppTitleLabel")
         header_layout.addWidget(self.title_label)
@@ -100,10 +117,29 @@ class MainWindow(QMainWindow):
         self.lang_btn.clicked.connect(self.toggle_language)
         header_layout.addWidget(self.lang_btn)
         
-        self.layout.addWidget(self.top_bar)
+        main_layout.addWidget(self.top_bar)
         
-        # Tabs
-        self.tabs = QTabWidget()
+        # Content area with sidebar and stacked widget
+        content_widget = QWidget()
+        content_layout = QHBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        
+        # Sidebar
+        self.sidebar = SidebarNav()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setMinimumWidth(self._sidebar_width)
+        self.sidebar.setMaximumWidth(self._sidebar_width)
+        self.sidebar.panel_selected.connect(self.switch_to_panel)
+        self.sidebar.toggle_sidebar.connect(self.toggle_sidebar)
+        content_layout.addWidget(self.sidebar)
+        
+        # Stacked widget for panels
+        self.stacked_widget = QStackedWidget()
+        self.stacked_widget.setObjectName("PanelsContainer")
+        content_layout.addWidget(self.stacked_widget)
+        
+        main_layout.addWidget(content_widget)
         
         # Panels
         self.onboard_panel = OnboardPanel()
@@ -119,20 +155,27 @@ class MainWindow(QMainWindow):
 
         self.onboard_panel.dependencies_ready.connect(self.dependency_panel.refresh_all_cards)
         self.onboard_panel.sample_ready.connect(self.instance_panel.refresh_instances)
+        self.onboard_panel.navigate_to_tab.connect(self.switch_to_tab)
 
-        # Add Tabs
-        self.tabs.addTab(self.onboard_panel, i18n.t("tab_onboard"))
-        self.tabs.addTab(self.instance_panel, i18n.t("tab_instances"))
-        self.tabs.addTab(self.dependency_panel, i18n.t("tab_dependencies"))
-        self.tabs.addTab(self.backup_panel, i18n.t("tab_backups"))
-        self.tabs.addTab(self.log_panel, i18n.t("tab_logs"))
-        self.tabs.addTab(self.plugin_panel, i18n.t("tab_plugins"))
-        self.tabs.addTab(self.channel_config_panel, i18n.t("tab_channels"))
-        self.tabs.addTab(self.llamacpp_panel, i18n.t("tab_llamacpp"))
-        self.tabs.addTab(self.model_switch_panel, i18n.t("tab_model_switch"))
-        self.tabs.addTab(self.advanced_panel, i18n.t("tab_advanced"))
+        # Add panels to stacked widget
+        self.panel_map = {
+            "onboard": self.onboard_panel,
+            "instances": self.instance_panel,
+            "dependencies": self.dependency_panel,
+            "backups": self.backup_panel,
+            "logs": self.log_panel,
+            "plugins": self.plugin_panel,
+            "channels": self.channel_config_panel,
+            "llamacpp": self.llamacpp_panel,
+            "model_switch": self.model_switch_panel,
+            "advanced": self.advanced_panel,
+        }
         
-        self.layout.addWidget(self.tabs)
+        for panel in self.panel_map.values():
+            self.stacked_widget.addWidget(panel)
+        
+        # Setup sidebar sections
+        self._setup_sidebar_sections()
         
         # System Tray logic if needed (optional)
         self.setup_tray()
@@ -146,7 +189,52 @@ class MainWindow(QMainWindow):
             app.aboutToQuit.connect(self.shutdown)
         
         self.update_ui_texts()
+        # Set initial panel
+        self.switch_to_panel("onboard")
         QTimer.singleShot(0, self._check_openclaw_updates_on_startup)
+
+    def _setup_sidebar_sections(self):
+        """Setup sidebar sections based on i18n"""
+        section_configs = {
+            i18n.t("sidebar_section_main"): [
+                (i18n.t("tab_onboard"), "onboard"),
+                (i18n.t("tab_instances"), "instances"),
+                (i18n.t("tab_dependencies"), "dependencies"),
+            ],
+            i18n.t("sidebar_section_data"): [
+                (i18n.t("tab_backups"), "backups"),
+                (i18n.t("tab_logs"), "logs"),
+            ],
+            i18n.t("sidebar_section_advanced"): [
+                (i18n.t("tab_llamacpp"), "llamacpp"),
+                (i18n.t("tab_model_switch"), "model_switch"),
+                (i18n.t("tab_plugins"), "plugins"),
+                (i18n.t("tab_channels"), "channels"),
+                (i18n.t("tab_advanced"), "advanced"),
+            ],
+        }
+        self.sidebar.update_ui_texts(section_configs)
+
+    def toggle_sidebar(self):
+        """Toggle sidebar visibility"""
+        self._sidebar_collapsed = not self._sidebar_collapsed
+        
+        if self._sidebar_collapsed:
+            self.sidebar.setMaximumWidth(0)
+            self.sidebar.setMinimumWidth(0)
+            self.sidebar.set_collapsed(True)
+            self.sidebar_toggle_btn.setText("▶")
+        else:
+            self.sidebar.setMaximumWidth(self._sidebar_width)
+            self.sidebar.setMinimumWidth(self._sidebar_width)
+            self.sidebar.set_collapsed(False)
+            self.sidebar_toggle_btn.setText("☰")
+
+    def switch_to_panel(self, panel_name: str):
+        """Switch to a specific panel"""
+        if panel_name in self.panel_map:
+            self.stacked_widget.setCurrentWidget(self.panel_map[panel_name])
+            self.sidebar.select_panel(panel_name)
 
     def _check_openclaw_updates_on_startup(self):
         if not Config.get_setting("check_updates", True):
@@ -213,24 +301,25 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(i18n.t("app_title"))
         self.title_label.setText(i18n.t("app_title"))
         self.update_theme_button_text()
-
         self.lang_btn.setText(i18n.t("lang_switch"))
-        self.tabs.setTabText(0, i18n.t("tab_onboard"))
-        self.tabs.setTabText(1, i18n.t("tab_instances"))
-        self.tabs.setTabText(2, i18n.t("tab_dependencies"))
-        self.tabs.setTabText(3, i18n.t("tab_backups"))
-        self.tabs.setTabText(4, i18n.t("tab_logs"))
-        self.tabs.setTabText(5, i18n.t("tab_plugins"))
-        self.tabs.setTabText(6, i18n.t("tab_channels"))
-        self.tabs.setTabText(7, i18n.t("tab_llamacpp"))
-        self.tabs.setTabText(8, i18n.t("tab_model_switch"))
-        self.tabs.setTabText(9, i18n.t("tab_advanced"))
+        self._setup_sidebar_sections()
         if hasattr(self, "tray_icon") and self.tray_icon:
             self.tray_icon.setToolTip(i18n.t("app_title"))
         if hasattr(self, "action_show") and self.action_show:
             self.action_show.setText(i18n.t("tray_show_window"))
         if hasattr(self, "action_quit") and self.action_quit:
             self.action_quit.setText(i18n.t("tray_quit"))
+
+    def switch_to_tab(self, tab_key: str):
+        """Handle navigation from panels to other panels"""
+        panel_map = {
+            "channels": "channels",
+            "llamacpp": "llamacpp",
+            "model_switch": "model_switch",
+        }
+        target_name = panel_map.get(str(tab_key or "").strip())
+        if target_name is not None:
+            self.switch_to_panel(target_name)
     
     def setup_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():

@@ -89,6 +89,7 @@ class CreateSampleWorker(QThread):
 class OnboardPanel(QWidget):
     dependencies_ready = Signal()
     sample_ready = Signal()
+    navigate_to_tab = Signal(str)
 
     SAMPLE_INSTANCE_NAME = "openclaw"
     SAMPLE_INSTANCE_PORT = 18789
@@ -157,7 +158,38 @@ class OnboardPanel(QWidget):
         self.progress_sample.setMaximum(100)
         self.layout.addWidget(self.progress_sample)
 
-        # Step 3: start sample instance
+        # Step 3: configure LlamaCPP / model
+        self.step_model_widget = QWidget()
+        self.step_model_widget.setStyleSheet("border: 1px solid #d9d9d9; border-radius: 8px;")
+        model_layout = QHBoxLayout(self.step_model_widget)
+        model_layout.setContentsMargins(10, 8, 10, 8)
+        self.lbl_step_model = QLabel(i18n.t("onboard_step_model"))
+        self.lbl_step_model.setStyleSheet("font-size: 15px; font-weight: 600;")
+        model_layout.addWidget(self.lbl_step_model)
+        model_layout.addStretch()
+        self.btn_open_llamacpp = QPushButton(i18n.t("onboard_btn_config_llamacpp"))
+        self.btn_open_llamacpp.clicked.connect(self.open_llamacpp_tab)
+        model_layout.addWidget(self.btn_open_llamacpp)
+        self.btn_open_model_switch = QPushButton(i18n.t("onboard_btn_config_model"))
+        self.btn_open_model_switch.clicked.connect(self.open_model_switch_tab)
+        model_layout.addWidget(self.btn_open_model_switch)
+        self.layout.addWidget(self.step_model_widget)
+
+        # Step 4: configure channels
+        self.step_channel_widget = QWidget()
+        self.step_channel_widget.setStyleSheet("border: 1px solid #d9d9d9; border-radius: 8px;")
+        channel_layout = QHBoxLayout(self.step_channel_widget)
+        channel_layout.setContentsMargins(10, 8, 10, 8)
+        self.lbl_step_channel = QLabel(i18n.t("onboard_step_channels"))
+        self.lbl_step_channel.setStyleSheet("font-size: 15px; font-weight: 600;")
+        channel_layout.addWidget(self.lbl_step_channel)
+        channel_layout.addStretch()
+        self.btn_open_channel_config = QPushButton(i18n.t("onboard_btn_config_channels"))
+        self.btn_open_channel_config.clicked.connect(self.open_channel_config_tab)
+        channel_layout.addWidget(self.btn_open_channel_config)
+        self.layout.addWidget(self.step_channel_widget)
+
+        # Step 5: start sample instance
         self.step_start_widget = QWidget()
         self.step_start_widget.setStyleSheet("border: 1px solid #d9d9d9; border-radius: 8px;")
         start_layout = QHBoxLayout(self.step_start_widget)
@@ -172,7 +204,7 @@ class OnboardPanel(QWidget):
         start_layout.addWidget(self.btn_start_sample)
         self.layout.addWidget(self.step_start_widget)
 
-        # Step 4: open WebUI
+        # Step 6: open WebUI
         self.step_webui_widget = QWidget()
         self.step_webui_widget.setStyleSheet("border: 1px solid #d9d9d9; border-radius: 8px;")
         webui_layout = QHBoxLayout(self.step_webui_widget)
@@ -282,6 +314,9 @@ class OnboardPanel(QWidget):
         self.btn_start_sample.setEnabled(sample_done and (not running_done))
         self.btn_start_sample.setText(i18n.t("onboard_btn_start_instance") if not running_done else i18n.t("onboard_done"))
 
+        self.btn_open_llamacpp.setEnabled(sample_done)
+        self.btn_open_model_switch.setEnabled(sample_done)
+        self.btn_open_channel_config.setEnabled(sample_done)
         self.btn_open_webui.setEnabled(running_done)
 
         if dep_task_running:
@@ -295,6 +330,8 @@ class OnboardPanel(QWidget):
             self.lbl_status.setText(i18n.t("onboard_hint_install_dependencies"))
         elif not sample_done:
             self.lbl_status.setText(i18n.t("onboard_hint_create_sample"))
+        elif not running_done:
+            self.lbl_status.setText(i18n.t("onboard_hint_configure_before_start"))
         else:
             self.lbl_status.setText(i18n.t("onboard_hint_start_instance"))
 
@@ -398,6 +435,15 @@ class OnboardPanel(QWidget):
                 i18n.t("onboard_msg_instance_start_failed", error=str(e)),
             )
 
+    def open_llamacpp_tab(self):
+        self.navigate_to_tab.emit("llamacpp")
+
+    def open_model_switch_tab(self):
+        self.navigate_to_tab.emit("model_switch")
+
+    def open_channel_config_tab(self):
+        self.navigate_to_tab.emit("channels")
+
     def open_sample_webui(self):
         if not self._sample_ok():
             QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_instance_not_found"))
@@ -419,8 +465,13 @@ class OnboardPanel(QWidget):
         self.lbl_desc.setText(i18n.t("onboard_desc"))
         self.lbl_step_dep.setText(i18n.t("onboard_step_dependencies"))
         self.lbl_step_sample.setText(i18n.t("onboard_step_sample"))
+        self.lbl_step_model.setText(i18n.t("onboard_step_model"))
+        self.lbl_step_channel.setText(i18n.t("onboard_step_channels"))
         self.lbl_step_start.setText(i18n.t("onboard_step_start_instance"))
         self.lbl_step_webui.setText(i18n.t("onboard_step_open_webui"))
+        self.btn_open_llamacpp.setText(i18n.t("onboard_btn_config_llamacpp"))
+        self.btn_open_model_switch.setText(i18n.t("onboard_btn_config_model"))
+        self.btn_open_channel_config.setText(i18n.t("onboard_btn_config_channels"))
         self.btn_open_webui.setText(i18n.t("onboard_btn_open_webui"))
         self.btn_wiki.setText(i18n.t("onboard_btn_wiki"))
         self.lbl_support.setText(i18n.t("onboard_support_title"))

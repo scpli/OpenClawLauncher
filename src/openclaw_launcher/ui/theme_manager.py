@@ -103,6 +103,111 @@ QPushButton#ToolButton:pressed {{
     background: {palette['surface_pressed']};
 }}
 
+QWidget#Sidebar {{
+    background: {palette['surface']};
+    border-right: 1px solid {palette['outline']};
+    min-width: 60px;
+}}
+
+QWidget#PanelsContainer {{
+    background: {palette['bg']};
+}}
+
+QScrollArea#SidebarScroll {{
+    background: {palette['surface']};
+    border: none;
+}}
+
+QScrollArea#SidebarScroll > QWidget {{
+    background: {palette['surface']};
+}}
+
+QPushButton#SidebarToggleButton {{
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    border-radius: 8px;
+    padding: 0;
+    font-weight: 700;
+    font-size: 16px;
+    background: {palette['surface_alt']};
+    color: {palette['text_secondary']};
+    border: 1px solid {palette['outline']};
+}}
+
+QPushButton#SidebarToggleButton:hover {{
+    background: {palette['surface_hover']};
+    color: {palette['text_primary']};
+}}
+
+QPushButton#SidebarToggleButton:pressed {{
+    background: {palette['surface_pressed']};
+}}
+
+QPushButton#SidebarCollapseButton {{
+    min-width: 20px;
+    max-width: 20px;
+    min-height: 20px;
+    max-height: 20px;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    font-weight: 700;
+    font-size: 10px;
+    background: transparent;
+    color: {palette['text_secondary']};
+}}
+
+QPushButton#SidebarCollapseButton:hover {{
+    background: {palette['surface_alt']};
+    color: {palette['text_primary']};
+}}
+
+QPushButton#SidebarSectionButton {{
+    border: none;
+    border-radius: 8px;
+    padding: 8px 8px;
+    font-weight: 700;
+    background: transparent;
+    color: {palette['text_primary']};
+    text-align: left;
+}}
+
+QPushButton#SidebarSectionButton:hover {{
+    background: {palette['surface_alt']};
+}}
+
+QPushButton#SidebarNavButton {{
+    min-height: 40px;
+    border: none;
+    border-radius: 8px;
+    padding: 0 12px;
+    font-weight: 600;
+    background: transparent;
+    color: {palette['text_secondary']};
+    text-align: left;
+    margin: 2px 8px;
+}}
+
+QPushButton#SidebarNavButton:hover {{
+    background: {palette['surface_alt']};
+    color: {palette['text_primary']};
+}}
+
+QPushButton#SidebarNavButtonActive,
+QPushButton#SidebarNavButton:checked {{
+    background: {palette['primary_soft']};
+    color: {palette['primary']};
+    border: 1px solid {palette['primary']};
+}}
+
+QPushButton#SidebarNavButtonActive:hover,
+QPushButton#SidebarNavButton:checked:hover {{
+    background: {palette['primary_soft']};
+    color: {palette['primary']};
+}}
+
 QTabWidget::pane {{
     top: -1px;
     background: {palette['surface']};
