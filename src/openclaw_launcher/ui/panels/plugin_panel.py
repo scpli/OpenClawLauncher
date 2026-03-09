@@ -1,6 +1,9 @@
 from pathlib import Path
 import shutil
 import subprocess
+import os
+import stat
+import time
 
 from PySide6.QtCore import QThread, Signal, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -77,6 +80,47 @@ class PluginInstallWorker(QThread):
             self.error.emit(str(e))
 
 
+class PluginUninstallWorker(QThread):
+    finished = Signal(str, bool, str)
+    error = Signal(str, str, str)
+
+    def __init__(self, plugin_path: Path):
+        super().__init__()
+        self.plugin_path = plugin_path
+
+    def run(self):
+        plugin_name = self.plugin_path.name
+        try:
+            if self.plugin_path.exists() and self.plugin_path.is_dir():
+                self._remove_dir_with_retries(self.plugin_path)
+
+            self.finished.emit(plugin_name, self.plugin_path.exists(), str(self.plugin_path))
+        except Exception as e:
+            self.error.emit(plugin_name, str(e), str(self.plugin_path))
+
+    def _remove_dir_with_retries(self, target_dir: Path, retries: int = 5, delay: float = 0.2):
+        def _onerror(func, path, exc_info):
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
+        last_error = None
+        for attempt in range(retries):
+            try:
+                if target_dir.exists():
+                    shutil.rmtree(target_dir, onerror=_onerror)
+                return
+            except Exception as e:
+                last_error = e
+                if attempt < retries - 1:
+                    time.sleep(delay)
+
+        if last_error:
+            raise last_error
+
+
 class PluginPanel(QWidget):
     RECOMMENDED_PLUGINS = [
         {
@@ -92,7 +136,8 @@ class PluginPanel(QWidget):
     def __init__(self):
         super().__init__()
         self.install_worker = None
-        self.recommended_install_buttons = []
+        self.uninstall_worker = None
+        self.recommended_install_buttons = {}
 
         self.layout = QVBoxLayout(self)
         
@@ -122,6 +167,12 @@ class PluginPanel(QWidget):
         self.install_progress.setTextVisible(False)
         self.layout.addWidget(self.install_progress)
 
+        self.uninstall_progress = QProgressBar()
+        self.uninstall_progress.setVisible(False)
+        self.uninstall_progress.setTextVisible(True)
+        self.uninstall_progress.setFormat(i18n.t("progress_delete_running"))
+        self.layout.addWidget(self.uninstall_progress)
+
         install_row = QHBoxLayout()
         self.plugin_input = QLineEdit()
         self.plugin_input.setPlaceholderText(i18n.t("ph_plugin_name"))
@@ -149,7 +200,7 @@ class PluginPanel(QWidget):
             if widget:
                 widget.deleteLater()
 
-        self.recommended_install_buttons = []
+        self.recommended_install_buttons = {}
 
         for plugin in self.RECOMMENDED_PLUGINS:
             row_widget = QWidget()
@@ -165,7 +216,7 @@ class PluginPanel(QWidget):
                 lambda checked=False, package_name=plugin["name"]: self.start_recommended_install(package_name)
             )
             row_layout.addWidget(btn_install)
-            self.recommended_install_buttons.append(btn_install)
+            self.recommended_install_buttons[plugin["name"]] = btn_install
 
             btn_help = QPushButton(i18n.t("btn_help"))
             btn_help.clicked.connect(
@@ -178,9 +229,32 @@ class PluginPanel(QWidget):
         self._update_recommended_controls_state()
 
     def _update_recommended_controls_state(self):
-        enable_install = self._has_selected_instance() and self.install_worker is None
-        for button in self.recommended_install_buttons:
-            button.setEnabled(enable_install)
+        enable_install = (
+            self._has_selected_instance()
+            and self.install_worker is None
+            and self.uninstall_worker is None
+        )
+        for plugin_name, button in self.recommended_install_buttons.items():
+            is_installed = self._is_recommended_plugin_installed(plugin_name)
+            button.setEnabled(enable_install and (not is_installed))
+
+    def _is_recommended_plugin_installed(self, plugin_name: str) -> bool:
+        instance_path = self._get_selected_instance_path()
+        if not instance_path:
+            return False
+
+        path_parts = [part for part in plugin_name.split("/") if part]
+        if not path_parts:
+            return False
+
+        for _, source_dir in self._candidate_extension_dirs(instance_path):
+            if not source_dir.exists() or not source_dir.is_dir():
+                continue
+            plugin_dir = source_dir.joinpath(*path_parts)
+            if plugin_dir.exists() and plugin_dir.is_dir():
+                return True
+
+        return False
 
     def _candidate_extension_dirs(self, base_dir: Path):
         return [
@@ -214,7 +288,7 @@ class PluginPanel(QWidget):
         return bool(self.instance_selector.currentData())
 
     def _update_install_controls_state(self):
-        enable_install = self._has_selected_instance() and self.install_worker is None
+        enable_install = self._has_selected_instance() and self.install_worker is None and self.uninstall_worker is None
         self.btn_install.setEnabled(enable_install)
         self._update_recommended_controls_state()
 
@@ -275,6 +349,7 @@ class PluginPanel(QWidget):
             source_item.setExpanded(True)
 
         self.status_label.setText(i18n.t("status_ready"))
+        self._update_recommended_controls_state()
 
     def _add_uninstall_button(self, item: QTreeWidgetItem, plugin_path: Path):
         button = QPushButton(i18n.t("btn_uninstall"))
@@ -282,6 +357,13 @@ class PluginPanel(QWidget):
         self.plugin_tree.setItemWidget(item, 2, button)
 
     def uninstall_plugin(self, plugin_path: Path):
+        if self.uninstall_worker:
+            QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_plugin_uninstall_busy"))
+            return
+        if self.install_worker:
+            QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_plugin_install_busy"))
+            return
+
         if not plugin_path.exists() or not plugin_path.is_dir():
             QMessageBox.warning(self, i18n.t("title_warning"), i18n.t("msg_uninstall_missing"))
             self.refresh_plugins()
@@ -296,16 +378,63 @@ class PluginPanel(QWidget):
         if reply != QMessageBox.Yes:
             return
 
-        try:
-            shutil.rmtree(plugin_path)
-            self.status_label.setText(i18n.t("msg_uninstall_success", name=plugin_path.name))
-            self.refresh_plugins()
-        except Exception as exc:
+        plugin_name = plugin_path.name
+        self.status_label.setText(i18n.t("msg_plugin_uninstalling", name=plugin_name))
+        self._set_uninstalling_state(True)
+
+        worker = PluginUninstallWorker(plugin_path)
+        worker.finished.connect(self.on_uninstall_finished)
+        worker.error.connect(self.on_uninstall_error)
+        worker.start()
+        self.uninstall_worker = worker
+
+    def on_uninstall_finished(self, plugin_name: str, residual_exists: bool, plugin_path_str: str):
+        self._set_uninstalling_state(False)
+        self.uninstall_worker = None
+
+        plugin_path = Path(plugin_path_str)
+        if residual_exists:
+            self._show_manual_cleanup_dialog(
+                plugin_path,
+                i18n.t("msg_uninstall_manual_cleanup_detected", name=plugin_name, path=str(plugin_path)),
+            )
+            self.status_label.setText(i18n.t("title_warning"))
+        else:
+            self.status_label.setText(i18n.t("msg_uninstall_success", name=plugin_name))
+
+        self.refresh_plugins()
+
+    def on_uninstall_error(self, plugin_name: str, error_msg: str, plugin_path_str: str):
+        self._set_uninstalling_state(False)
+        self.uninstall_worker = None
+
+        plugin_path = Path(plugin_path_str)
+        if plugin_path.exists():
+            self._show_manual_cleanup_dialog(
+                plugin_path,
+                i18n.t("msg_uninstall_manual_cleanup_hint", name=plugin_name, path=str(plugin_path), error=error_msg),
+            )
+        else:
             QMessageBox.critical(
                 self,
                 i18n.t("title_error"),
-                i18n.t("msg_uninstall_failed", name=plugin_path.name, error=str(exc)),
+                i18n.t("msg_uninstall_failed", name=plugin_name, error=error_msg),
             )
+
+        self.status_label.setText(i18n.t("title_warning"))
+        self.refresh_plugins()
+
+    def _show_manual_cleanup_dialog(self, path: Path, message: str):
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Warning)
+        dialog.setWindowTitle(i18n.t("title_warning"))
+        dialog.setText(message)
+        btn_open = dialog.addButton(i18n.t("btn_open_folder"), QMessageBox.ActionRole)
+        dialog.addButton(QMessageBox.Close)
+        dialog.exec()
+
+        if dialog.clickedButton() == btn_open and path.exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def install_from_input(self):
         plugin_name = self.plugin_input.text().strip()
@@ -389,10 +518,11 @@ class PluginPanel(QWidget):
         )
 
     def _set_installing_state(self, installing: bool):
-        self.btn_install.setEnabled((not installing) and self._has_selected_instance())
+        self.btn_install.setEnabled((not installing) and self._has_selected_instance() and self.uninstall_worker is None)
         self.btn_refresh.setEnabled(not installing)
         self.instance_selector.setEnabled(not installing)
-        for button in self.recommended_install_buttons:
+        self.plugin_tree.setEnabled(not installing)
+        for button in self.recommended_install_buttons.values():
             button.setEnabled((not installing) and self._has_selected_instance())
         self.install_progress.setVisible(installing)
         if installing:
@@ -400,6 +530,23 @@ class PluginPanel(QWidget):
         else:
             self.install_progress.setRange(0, 1)
             self.install_progress.setValue(0)
+
+    def _set_uninstalling_state(self, uninstalling: bool):
+        self.btn_install.setEnabled((not uninstalling) and self._has_selected_instance() and self.install_worker is None)
+        self.btn_refresh.setEnabled(not uninstalling)
+        self.instance_selector.setEnabled(not uninstalling)
+        self.plugin_input.setEnabled(not uninstalling)
+        self.plugin_tree.setEnabled(not uninstalling)
+        for button in self.recommended_install_buttons.values():
+            button.setEnabled((not uninstalling) and self._has_selected_instance() and self.install_worker is None)
+
+        self.uninstall_progress.setVisible(uninstalling)
+        if uninstalling:
+            self.uninstall_progress.setRange(0, 0)
+            self.uninstall_progress.setFormat(i18n.t("progress_delete_running"))
+        else:
+            self.uninstall_progress.setRange(0, 1)
+            self.uninstall_progress.setValue(0)
 
     def update_ui_texts(self):
         self.instance_label.setText(i18n.t("lbl_select_instance"))
@@ -421,3 +568,12 @@ class PluginPanel(QWidget):
                 worker.terminate()
                 worker.wait(1000)
         self.install_worker = None
+
+        uninstall_worker = self.uninstall_worker
+        if uninstall_worker and uninstall_worker.isRunning():
+            uninstall_worker.requestInterruption()
+            uninstall_worker.wait(2000)
+            if uninstall_worker.isRunning():
+                uninstall_worker.terminate()
+                uninstall_worker.wait(1000)
+        self.uninstall_worker = None
