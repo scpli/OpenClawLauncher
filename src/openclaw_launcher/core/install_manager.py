@@ -528,8 +528,17 @@ class InstallManager:
     @classmethod
     def install_dependencies(cls, instance_path: Path, instance_name: str, log_stream: Optional[TextIO] = None):
         """Install Node dependencies during instance initialization."""
+        # 创建 .npmrc 文件并写入指定内容
+        npmrc_path = instance_path / ".npmrc"
+        npmrc_content = """
+node-linker=hoisted
+store-dir=../../.pnpm-store
+package-import-method=copy
+""".strip() + "\n"
+        npmrc_path.write_text(npmrc_content, encoding="utf-8")
+
         env = cls.get_runtime_env(instance_path=instance_path, instance_name=instance_name)
-        
+
         logger.info(f"Installing dependencies in {instance_path}")
         cls._run_pnpm(instance_path, ["install"], env, log_stream=log_stream)
 

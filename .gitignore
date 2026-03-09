@@ -30,4 +30,5 @@ config.json
 
 # uv lock files
 *.lock
+.pnpm-store
 llama/
