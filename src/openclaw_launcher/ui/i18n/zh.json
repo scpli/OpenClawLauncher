@@ -206,7 +206,7 @@
     "msg_uninstall_manual_cleanup_hint": "卸载插件 {name} 时发生错误，可能有残留文件需要手动清理。\n\n目录：{path}\n错误：{error}",
     "msg_uninstall_manual_cleanup_detected": "插件 {name} 卸载后仍检测到残留目录，请手动清理。\n\n目录：{path}",
     "channel_discord": "Discord",
-    "channel_telegraph": "Telegraph",
+    "channel_telegram": "telegram",
     "channel_feishu": "Feishu",
     "channel_dingtalk": "DingTalk",
     "channel_qq": "QQ",

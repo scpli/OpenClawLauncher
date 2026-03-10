@@ -22,11 +22,11 @@ from ..i18n import i18n
 class ChannelConfigPanel(QWidget):
     DINGTALK_PLUGIN = "@dingtalk-real-ai/dingtalk-connector"
     QQ_PLUGIN = "@sliverp/qqbot"
-    TELEGRAPH_KEYS = ("telegraph", "telegram")
+    telegram_KEYS = ("telegram", "telegram")
 
     def __init__(self):
         super().__init__()
-        self._active_telegraph_key = "telegraph"
+        self._active_telegram_key = "telegram"
         self._dingtalk_available = False
         self._qq_available = False
 
@@ -62,10 +62,10 @@ class ChannelConfigPanel(QWidget):
         self.discord_token_label = QLabel()
         self.channel_form.addRow(self.discord_token_label, self.discord_token)
 
-        self.telegraph_token = QLineEdit()
-        self.telegraph_token.setPlaceholderText(i18n.t("ph_bot_token"))
-        self.telegraph_token_label = QLabel()
-        self.channel_form.addRow(self.telegraph_token_label, self.telegraph_token)
+        self.telegram_token = QLineEdit()
+        self.telegram_token.setPlaceholderText(i18n.t("ph_bot_token"))
+        self.telegram_token_label = QLabel()
+        self.channel_form.addRow(self.telegram_token_label, self.telegram_token)
 
         self.feishu_app_id = QLineEdit()
         self.feishu_app_secret = QLineEdit()
@@ -119,7 +119,7 @@ class ChannelConfigPanel(QWidget):
 
     def _update_channel_field_labels(self):
         self.discord_token_label.setText(f"{i18n.t('channel_discord')} {i18n.t('lbl_bot_token')}")
-        self.telegraph_token_label.setText(f"{i18n.t('channel_telegraph')} {i18n.t('lbl_bot_token')}")
+        self.telegram_token_label.setText(f"{i18n.t('channel_telegram')} {i18n.t('lbl_bot_token')}")
         self.feishu_app_id_label.setText(f"{i18n.t('channel_feishu')} {i18n.t('lbl_app_id')}")
         self.feishu_app_secret_label.setText(f"{i18n.t('channel_feishu')} {i18n.t('lbl_app_secret')}")
         self.dingtalk_app_id_label.setText(f"{i18n.t('channel_dingtalk')} {i18n.t('lbl_app_id')}")
@@ -245,18 +245,18 @@ class ChannelConfigPanel(QWidget):
             if isinstance(discord_obj, dict):
                 self._set_text(self.discord_token, discord_obj.get("botToken"))
 
-            telegraph_obj = None
-            active_key = "telegraph"
-            for key in self.TELEGRAPH_KEYS:
+            telegram_obj = None
+            active_key = "telegram"
+            for key in self.telegram_KEYS:
                 obj = channels.get(key)
                 if isinstance(obj, dict):
-                    telegraph_obj = obj
+                    telegram_obj = obj
                     active_key = key
                     break
-            if telegraph_obj is None:
-                telegraph_obj = {}
-            self._active_telegraph_key = active_key
-            self._set_text(self.telegraph_token, telegraph_obj.get("botToken"))
+            if telegram_obj is None:
+                telegram_obj = {}
+            self._active_telegram_key = active_key
+            self._set_text(self.telegram_token, telegram_obj.get("botToken"))
 
             feishu_obj = channels.get("feishu")
             if isinstance(feishu_obj, dict):
@@ -281,7 +281,7 @@ class ChannelConfigPanel(QWidget):
     def _clear_fields(self):
         for edit in [
             self.discord_token,
-            self.telegraph_token,
+            self.telegram_token,
             self.feishu_app_id,
             self.feishu_app_secret,
             self.dingtalk_app_id,
@@ -370,10 +370,10 @@ class ChannelConfigPanel(QWidget):
             )
             self._merge_channel(
                 channels_obj,
-                self._active_telegraph_key,
+                self._active_telegram_key,
                 {
                     "enabled": True,
-                    "botToken": self.telegraph_token.text().strip(),
+                    "botToken": self.telegram_token.text().strip(),
                 },
             )
             self._merge_channel(
@@ -437,7 +437,7 @@ class ChannelConfigPanel(QWidget):
         self.btn_refresh.setText(i18n.t("btn_refresh"))
         self._update_channel_field_labels()
         self.discord_token.setPlaceholderText(i18n.t("ph_bot_token"))
-        self.telegraph_token.setPlaceholderText(i18n.t("ph_bot_token"))
+        self.telegram_token.setPlaceholderText(i18n.t("ph_bot_token"))
         self.feishu_app_id.setPlaceholderText(i18n.t("ph_app_id"))
         self.feishu_app_secret.setPlaceholderText(i18n.t("ph_app_secret"))
         self.dingtalk_app_id.setPlaceholderText(i18n.t("ph_app_id"))

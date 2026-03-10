@@ -198,18 +198,18 @@ class MainWindow(QMainWindow):
         section_configs = {
             i18n.t("sidebar_section_main"): [
                 (i18n.t("tab_onboard"), "onboard"),
-                (i18n.t("tab_instances"), "instances"),
-                (i18n.t("tab_dependencies"), "dependencies"),
-            ],
-            i18n.t("sidebar_section_data"): [
-                (i18n.t("tab_backups"), "backups"),
-                (i18n.t("tab_logs"), "logs"),
-            ],
-            i18n.t("sidebar_section_advanced"): [
+                (i18n.t("tab_channels"), "channels"),
                 (i18n.t("tab_llamacpp"), "llamacpp"),
                 (i18n.t("tab_model_switch"), "model_switch"),
+            ],
+            i18n.t("sidebar_section_data"): [
+                (i18n.t("tab_instances"), "instances"),
+                (i18n.t("tab_dependencies"), "dependencies"),
+                (i18n.t("tab_backups"), "backups"),
+            ],
+            i18n.t("sidebar_section_advanced"): [
+                (i18n.t("tab_logs"), "logs"),
                 (i18n.t("tab_plugins"), "plugins"),
-                (i18n.t("tab_channels"), "channels"),
                 (i18n.t("tab_advanced"), "advanced"),
             ],
         }

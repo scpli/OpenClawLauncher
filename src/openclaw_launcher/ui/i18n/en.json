@@ -205,7 +205,7 @@
     "msg_uninstall_manual_cleanup_hint": "An error occurred while uninstalling plugin {name}. Some residual files may require manual cleanup.\n\nDirectory: {path}\nError: {error}",
     "msg_uninstall_manual_cleanup_detected": "Residual directory was still detected after uninstalling plugin {name}. Please clean it up manually.\n\nDirectory: {path}",
     "channel_discord": "Discord",
-    "channel_telegraph": "Telegraph",
+    "channel_telegram": "telegram",
     "channel_feishu": "Feishu",
     "channel_dingtalk": "DingTalk",
     "channel_qq": "QQ",
