@@ -168,15 +168,25 @@ class ChannelConfigPanel(QWidget):
         if not instance_path:
             return False
 
+        normalized = plugin_name.strip().lower()
         path_parts = [part for part in plugin_name.split("/") if part]
-        if not path_parts:
+        short_name = path_parts[-1].lower() if path_parts else ""
+        if not short_name:
             return False
 
         for source_dir in self._candidate_extension_dirs(instance_path):
             if not source_dir.exists() or not source_dir.is_dir():
                 continue
-            plugin_dir = source_dir.joinpath(*path_parts)
-            if plugin_dir.exists() and plugin_dir.is_dir():
+
+            # 1) Direct match for full package path, e.g. @scope/name
+            if path_parts:
+                plugin_dir = source_dir.joinpath(*path_parts)
+                if plugin_dir.exists() and plugin_dir.is_dir():
+                    return True
+
+            # 2) Direct match for unscoped folder, e.g. name
+            direct_short_dir = source_dir / short_name
+            if direct_short_dir.exists() and direct_short_dir.is_dir():
                 return True
 
         return False
