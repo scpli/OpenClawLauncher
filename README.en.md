@@ -24,17 +24,28 @@ Its primary goals are:
 
 ## Key Features
 
-- **Guided Onboarding**: The Onboard panel helps first-time setup with one-click dependency install, sample instance creation, and WebUI launch.
+- **Guided Onboarding**: The Onboard panel now covers a 6-step flow (install dependencies, create instance, configure LlamaCPP/model, configure channels, start instance, open WebUI).
 - **Instance Management**: Create/start/stop/delete instances, with optional pre-update backup, open-folder action, and instance CLI launcher.
 - **Runtime Management**: Manage OpenClaw / Node.js (required) and Python / uv (optional) in Dependencies, including download and default-version switching.
+- **Channel Configuration**: Configure Discord / Telegram / Feishu / DingTalk / QQ credentials per instance in Channels, with stop-before-save safeguards.
+- **Local Model Serving**: Configure and run local GGUF inference in LlamaCPP (port, GPU layers, extra args, API health test).
+- **Model Switching**: Switch instance model providers in Model Switch (OpenAI/DeepSeek/Moonshot/Ollama/Llama.cpp and more) with config automation.
 - **Plugin Management**: Install/uninstall plugins per instance in the Plugins panel, with one-click recommended plugins.
 - **Backup & Restore**: Create zip backups and restore instances; dependency reinstall is attempted after restore.
 - **Log Viewer**: Follow instance logs in-app, clear logs, or open log files with the system default app.
 - **Advanced Settings**: Configure tray behavior, auto-start, update checks, source mirrors, and troubleshooting cleanup actions.
 
+## Footprint Advantage (Important)
+
+- **Small launcher package footprint**: keeps the app lightweight while managing runtimes and instances on demand.
+- **Compact per-instance size**: under common setup, **each instance is about 1GB**, making multi-instance usage practical.
+
 ## Panel Overview
 
-- **Onboard**: 4-step guided flow (install dependencies -> create sample instance -> start instance -> open WebUI).
+- **Onboard**: 6-step guided flow (install dependencies -> create instance -> configure LlamaCPP/model -> configure channels -> start instance -> open WebUI).
+- **Channels**: Per-instance channel credential/config editor with plugin dependency checks and stop-before-save confirmation.
+- **LlamaCPP**: Local GGUF model service control (model file, port, GPU layers, start/stop, API test, logs).
+- **Model Switch**: Per-instance model provider switching for both online APIs and local model services.
 - **Instances**: Lifecycle operations, version update, and shortcuts for folder/CLI.
 - **Dependencies**: Runtime version list, download progress, and default-version switching.
 - **Backups**: Backup creation, backup list, restore flow, and overwrite confirmation.
@@ -61,6 +72,8 @@ After launching `OpenClaw Launcher`:
 
 - Start with the **Onboard** panel for first-run initialization. Tutorial: [Wiki](https://github.com/shinnpuru/OpenClawLauncher/wiki)
 - Confirm Node.js / OpenClaw (required) and Python / uv (optional) in **Dependencies**.
+- Configure local or online model settings in **LlamaCPP** and **Model Switch**.
+- Configure bot channels in **Channels**.
 - Create and run instances in **Instances**, then update version or open folder/CLI when needed.
 - Install required extensions in **Plugins**.
 - Use **Logs** and **Backups** for troubleshooting and data safety.
