@@ -790,10 +790,6 @@ package-import-method=copy
             ".env.local",
             ".npmrc",
             ".openclaw",
-            "apps",
-            "src",
-            "ui",
-            "scripts",
         }
 
         package_json = instance_path / "package.json"
@@ -895,8 +891,8 @@ package-import-method=copy
                 cls.apply_windows_a2ui_patch(target_path, log_stream=log_file)
 
             cls.install_dependencies(target_path, instance_name, log_stream=log_file)
-            cls.build_frontend(target_path, instance_name, log_stream=log_file)
             cls.build_backend(target_path, instance_name, log_stream=log_file)
+            cls.build_frontend(target_path, instance_name, log_stream=log_file)
             cls.run_onboard_non_interactive(target_path, instance_name, instance_port, log_stream=log_file)
             cls.apply_default_openclaw_config(target_path)
             cls.cleanup_instance_after_install(target_path, log_stream=log_file)
