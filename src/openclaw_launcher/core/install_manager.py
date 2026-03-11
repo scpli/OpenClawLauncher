@@ -1014,8 +1014,10 @@ package-import-method=copy
             
             # Reinstall dependencies
             cls.install_dependencies(current_path, instance_name, log_stream=log_file)
-            cls.build_frontend(current_path, instance_name, log_stream=log_file)
             cls.build_backend(current_path, instance_name, log_stream=log_file)
+            cls.build_frontend(current_path, instance_name, log_stream=log_file)
+            cls.cleanup_instance_after_install(current_path, log_stream=log_file)
+            cls.reinstall_production_dependencies(current_path, instance_name, log_stream=log_file)
 
             log_file.write("===== Instance update completed =====\n")
             log_file.flush()
