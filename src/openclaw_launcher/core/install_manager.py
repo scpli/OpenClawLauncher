@@ -695,15 +695,6 @@ package-import-method=copy
             except Exception as exc:
                 raise RuntimeError(f"Failed to parse OpenClaw config: {exc}") from exc
 
-        preserved_workspace = None
-        agents_obj = config_data.get("agents")
-        if isinstance(agents_obj, dict):
-            defaults_obj = agents_obj.get("defaults")
-            if isinstance(defaults_obj, dict):
-                workspace_obj = defaults_obj.get("workspace")
-                if isinstance(workspace_obj, str) and workspace_obj.strip():
-                    preserved_workspace = workspace_obj
-
         config_data["tools"] = {
             "profile": "full"
         }
@@ -756,10 +747,12 @@ package-import-method=copy
             }
         }
 
+        agents_obj = config_data.get("agents")
         if not isinstance(agents_obj, dict):
             agents_obj = {}
 
         defaults_config = {
+            "workspace": ".openclaw/workspace-openclaw",
             "model": {
                 "primary": "llamacpp/local-model"
             },
@@ -774,8 +767,6 @@ package-import-method=copy
                 "maxConcurrent": 8
             }
         }
-        if preserved_workspace:
-            defaults_config["workspace"] = preserved_workspace
 
         agents_obj["defaults"] = defaults_config
         config_data["agents"] = agents_obj
