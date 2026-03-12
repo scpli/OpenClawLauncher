@@ -292,7 +292,7 @@
     "llamacpp_gpu_layers": "GPU 加载层数 (-ngl)：",
     "llamacpp_cpu_only": "CPU 模式（不使用 GPU）",
     "llamacpp_api_address": "API 地址：",
-    "llamacpp_default_api_url": "http://localhost:{port}",
+    "llamacpp_default_api_url": "http://127.0.0.1:{port}",
     "llamacpp_extra_params_desc": "额外的命令行参数（空格分隔）：",
     "llamacpp_extra_params_placeholder": "例如: -c 4096 --temp 0.7 --top_p 0.9\n每个参数空格隔开，请参考 llama.cpp 文档",
     "llamacpp_runtime_group": "服务控制与日志",

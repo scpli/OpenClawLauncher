@@ -74,12 +74,12 @@ ONLINE_PROVIDERS = {
         "requires_key": True,
     },
     "ollama": {
-        "base_url": "http://localhost:11434/v1",
+        "base_url": "http://127.0.0.1:11434/v1",
         "default_model": "qwen3.5",
         "requires_key": False,
     },
     "llamacpp": {
-        "base_url": "http://localhost:8989/v1",
+        "base_url": "http://127.0.0.1:8989/v1",
         "default_model": "local-model",
         "requires_key": False,
     },

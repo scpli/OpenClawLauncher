@@ -291,7 +291,7 @@
     "llamacpp_gpu_layers": "GPU Layers (-ngl):",
     "llamacpp_cpu_only": "CPU only (no GPU)",
     "llamacpp_api_address": "API Address:",
-    "llamacpp_default_api_url": "http://localhost:{port}",
+    "llamacpp_default_api_url": "http://127.0.0.1:{port}",
     "llamacpp_extra_params_desc": "Extra command line parameters (space-separated):",
     "llamacpp_extra_params_placeholder": "e.g.: -c 4096 --temp 0.7 --top_p 0.9\nSeparate parameters with spaces. Refer to llama.cpp documentation.",
     "llamacpp_runtime_group": "Server Control & Logs",

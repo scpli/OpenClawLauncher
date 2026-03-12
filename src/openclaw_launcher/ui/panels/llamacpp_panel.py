@@ -368,7 +368,7 @@ class LlamaCppTab(QWidget):
         import urllib.request
 
         port = self.port_spin.value()
-        url = f"http://localhost:{port}/v1/models"
+        url = f"http://127.0.0.1:{port}/v1/models"
 
         try:
             with urllib.request.urlopen(url, timeout=5) as response:

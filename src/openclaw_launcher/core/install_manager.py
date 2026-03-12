@@ -729,7 +729,7 @@ package-import-method=copy
         config_data["models"] = {
             "providers": {
                 "llamacpp": {
-                    "baseUrl": "http://localhost:8989/v1",
+                    "baseUrl": "http://127.0.0.1:8989/v1",
                     "apiKey": "not-required",
                     "auth": "api-key",
                     "api": "openai-completions",
