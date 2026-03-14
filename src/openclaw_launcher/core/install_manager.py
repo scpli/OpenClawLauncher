@@ -533,6 +533,7 @@ class InstallManager:
         npmrc_content = """
 node-linker=hoisted
 package-import-method=copy
+store-dir=../../.pnpm-store
 """.strip() + "\n"
         npmrc_path.write_text(npmrc_content, encoding="utf-8")
 
@@ -540,22 +541,6 @@ package-import-method=copy
 
         logger.info(f"Installing dependencies in {instance_path}")
         cls._run_pnpm(instance_path, ["install"], env, log_stream=log_stream)
-
-    @classmethod
-    def reinstall_production_dependencies(
-        cls,
-        instance_path: Path,
-        instance_name: str,
-        log_stream: Optional[TextIO] = None,
-    ):
-        """Reinstall production-only dependencies after build/cleanup."""
-        env = cls.get_runtime_env(instance_path=instance_path, instance_name=instance_name)
-        env["NODE_ENV"] = "production"
-        env["NPM_CONFIG_PRODUCTION"] = "true"
-        env["PNPM_FILTER"] = ""
-
-        logger.info(f"Reinstalling production dependencies in {instance_path}")
-        cls._run_pnpm(instance_path, ["install", "--prod"], env, log_stream=log_stream)
 
     @classmethod
     def apply_windows_a2ui_patch(cls, instance_path: Path, log_stream: Optional[TextIO] = None):
@@ -774,66 +759,6 @@ package-import-method=copy
         config_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     @classmethod
-    def _resolve_cleanup_keep_roots(cls, instance_path: Path) -> set[str]:
-        """Resolve top-level names to keep after installation cleanup."""
-        keep_roots = {
-            "package.json",
-            ".env.local",
-            ".npmrc",
-            ".openclaw",
-        }
-
-        package_json = instance_path / "package.json"
-        if not package_json.exists():
-            return keep_roots
-
-        try:
-            package_data = json.loads(package_json.read_text(encoding="utf-8"))
-            files = package_data.get("files", [])
-            if isinstance(files, list):
-                for item in files:
-                    if not isinstance(item, str):
-                        continue
-                    normalized = item.strip().replace("\\", "/").lstrip("./").rstrip("/")
-                    if not normalized:
-                        continue
-                    root_name = normalized.split("/", 1)[0]
-                    if root_name and root_name not in {".", ".."}:
-                        keep_roots.add(root_name)
-        except Exception:
-            # Best-effort cleanup list; keep defaults when package parsing fails.
-            pass
-
-        return keep_roots
-
-    @classmethod
-    def cleanup_instance_after_install(cls, instance_path: Path, log_stream: Optional[TextIO] = None):
-        """Remove non-runtime files after install, keeping package files roots and runtime state."""
-        keep_roots = cls._resolve_cleanup_keep_roots(instance_path)
-        removed_count = 0
-
-        for entry in instance_path.iterdir():
-            if entry.name in keep_roots:
-                continue
-
-            try:
-                if entry.is_symlink() or entry.is_file():
-                    entry.unlink(missing_ok=True)
-                elif entry.is_dir():
-                    shutil.rmtree(entry)
-                else:
-                    entry.unlink(missing_ok=True)
-                removed_count += 1
-            except Exception as exc:
-                logger.warning(f"Failed to remove {entry} during install cleanup: {exc}")
-
-        message = f"Install cleanup completed. Removed {removed_count} entries."
-        logger.info(message)
-        if log_stream is not None:
-            log_stream.write(message + "\n")
-            log_stream.flush()
-
-    @classmethod
     def complete_install(
         cls,
         instance_name: str,
@@ -886,8 +811,6 @@ package-import-method=copy
             cls.build_frontend(target_path, instance_name, log_stream=log_file)
             cls.run_onboard_non_interactive(target_path, instance_name, instance_port, log_stream=log_file)
             cls.apply_default_openclaw_config(target_path)
-            cls.cleanup_instance_after_install(target_path, log_stream=log_file)
-            cls.reinstall_production_dependencies(target_path, instance_name, log_stream=log_file)
 
             log_file.write("===== Instance bootstrap completed =====\n")
             log_file.flush()
@@ -1007,8 +930,6 @@ package-import-method=copy
             cls.install_dependencies(current_path, instance_name, log_stream=log_file)
             cls.build_backend(current_path, instance_name, log_stream=log_file)
             cls.build_frontend(current_path, instance_name, log_stream=log_file)
-            cls.cleanup_instance_after_install(current_path, log_stream=log_file)
-            cls.reinstall_production_dependencies(current_path, instance_name, log_stream=log_file)
 
             log_file.write("===== Instance update completed =====\n")
             log_file.flush()
