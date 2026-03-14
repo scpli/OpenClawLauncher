@@ -44,11 +44,12 @@ class RuntimeManager:
                 {"version": "3.12.1", "date": "2023-12-08", "tag": "20240107"}
             ],
             self.SOFTWARE_NODE: [
-                {"version": "22.12.0", "date": "2024-12-03"},
-                {"version": "22.13.1", "date": "2025-01-21"}
+                {"version": "22.22.1", "date": "2026-03-05"},
+                {"version": "24.14.0", "date": "2026-02-24"},
+                {"version": "25.8.1", "date": "2026-03-11"},
             ],
             self.SOFTWARE_UV: [
-                {"version": "0.1.10", "date": "2024-02-17"}
+                {"version": "0.10.10", "date": "2026-03-13"}
             ],
             self.SOFTWARE_OPENCLAW: []
         }
